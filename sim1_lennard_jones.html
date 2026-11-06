@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>원자간 결합 위치에너지 및 열팽창 시뮬레이터 (Lennard-Jones Potential)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    input[type=range] {
+      accent-color: #10b981;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+        <i data-lucide="atom" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">Module 01</span>
+          <h1 class="text-lg md:text-xl font-bold text-white tracking-tight">원자간 결합 위치에너지 및 열팽창 시뮬레이터</h1>
+        </div>
+        <p class="text-xs text-slate-400">레너드-존스 포텐셜(Lennard-Jones Potential) & 비대칭 진동에 의한 열팽창 메커니즘</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btnCapture" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>
+        <span>보고서용 캡처</span>
+      </button>
+      <button id="btnReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        <span>초기화</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Metric Overview Cards -->
+  <section class="px-6 pt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-7xl mx-auto w-full">
+    <div class="bg-slate-900/90 border border-slate-800/80 p-3.5 rounded-xl">
+      <div class="text-[11px] font-medium text-slate-400">평형 원자간 거리 (r₀)</div>
+      <div class="text-xl font-bold text-emerald-400 mono mt-0.5" id="metricR0">0.281 <span class="text-xs text-slate-400 font-normal">nm</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">r₀ = 2^(1/6) · σ (Net Force = 0)</div>
+    </div>
+    <div class="bg-slate-900/90 border border-slate-800/80 p-3.5 rounded-xl">
+      <div class="text-[11px] font-medium text-slate-400">탄성계수 proxy (E ∝ d²E/dr²)</div>
+      <div class="text-xl font-bold text-cyan-400 mono mt-0.5" id="metricModulus">116.5 <span class="text-xs text-slate-400 font-normal">GPa</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">우물 곡률 (Curvature at r₀)</div>
+    </div>
+    <div class="bg-slate-900/90 border border-slate-800/80 p-3.5 rounded-xl">
+      <div class="text-[11px] font-medium text-slate-400">현재 평균 원자간 거리 (r_avg)</div>
+      <div class="text-xl font-bold text-amber-400 mono mt-0.5" id="metricRavg">0.281 <span class="text-xs text-slate-400 font-normal">nm</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">온도 증가 시 비대칭 팽창</div>
+    </div>
+    <div class="bg-slate-900/90 border border-slate-800/80 p-3.5 rounded-xl">
+      <div class="text-[11px] font-medium text-slate-400">열팽창률 (Δr / r₀)</div>
+      <div class="text-xl font-bold text-rose-400 mono mt-0.5" id="metricExpansion">0.00 <span class="text-xs text-slate-400 font-normal">%</span></div>
+      <div class="text-[10px] text-slate-500 mt-1" id="metricAlpha">선팽창계수 α: 16.5 × 10⁻⁶/K</div>
+    </div>
+  </section>
+
+  <!-- Main Content (Split View) -->
+  <main class="flex-1 px-6 py-5 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
+    
+    <!-- Controls Panel (Left / Col-3) -->
+    <aside class="lg:col-span-4 flex flex-col gap-4">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
+          <i data-lucide="sliders" class="w-4 h-4 text-emerald-400"></i>
+          시뮬레이션 파라미터 제어
+        </h2>
+
+        <!-- Preset Selection -->
+        <div>
+          <label class="text-xs font-medium text-slate-300 block mb-1.5">결합 종류 프리셋 (Bond Type)</label>
+          <select id="presetSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 transition">
+            <option value="ionic">이온 결합 (Ionic - 예: NaCl, 깊고 가파른 우물, 낮은 열팽창)</option>
+            <option value="covalent">공유 결합 (Covalent - 예: Diamond, 가장 깊은 우물, 최강 결합)</option>
+            <option value="metallic" selected>금속 결합 (Metallic - 예: Cu, Fe, 중간 깊이 및 기울기)</option>
+            <option value="vdw">반데르발스 결합 (Van der Waals - 예: Ar, 매우 얕은 우물, 높은 열팽창)</option>
+            <option value="custom">사용자 직접 설정 (Custom)</option>
+          </select>
+        </div>
+
+        <!-- Temperature Slider -->
+        <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+          <div class="flex justify-between items-center mb-1.5">
+            <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-400"></i>
+              온도 (Temperature, T)
+            </label>
+            <span class="text-xs mono font-bold text-amber-400" id="tempValue">300 K</span>
+          </div>
+          <input type="range" id="tempSlider" min="0" max="1500" step="10" value="300" class="w-full cursor-pointer">
+          <div class="flex justify-between text-[10px] text-slate-500 mt-1 mono">
+            <span>0 K (절대영도)</span>
+            <span>750 K</span>
+            <span>1500 K</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2 leading-relaxed bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg">
+            🔥 온도가 증가할수록 열에너지(k_B·T)가 공급되어 원자의 진동 폭(Amplitude)이 커집니다.
+          </div>
+        </div>
+
+        <!-- Fine Tuning Sliders -->
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">우물 깊이 (ε, 결합 에너지)</span>
+              <span class="mono font-semibold text-emerald-400" id="epsilonValue">1.80 eV</span>
+            </div>
+            <input type="range" id="epsilonSlider" min="0.2" max="6.0" step="0.1" value="1.8" class="w-full">
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">원자 크기 매개변수 (σ)</span>
+              <span class="mono font-semibold text-cyan-400" id="sigmaValue">0.25 nm</span>
+            </div>
+            <input type="range" id="sigmaSlider" min="0.15" max="0.45" step="0.01" value="0.25" class="w-full">
+          </div>
+        </div>
+
+        <!-- Animation Controls -->
+        <div class="pt-2 border-t border-slate-800 flex gap-2">
+          <button id="btnPlayPause" class="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="play" class="w-4 h-4" id="playIcon"></i>
+            <span id="playText">진동 애니메이션 시작</span>
+          </button>
+        </div>
+
+        <!-- Theory Box -->
+        <div class="text-xs text-slate-400 bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-1.5 leading-relaxed">
+          <div class="font-semibold text-slate-200 flex items-center gap-1.5 text-[11px]">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-blue-400"></i>
+            핵심 재료과학 원리: 왜 열팽창이 발생하는가?
+          </div>
+          <p class="text-[11px]">
+            포텐셜 우물이 완전한 대칭(포물선형, 조화 진동자)이라면 온도가 올라가도 평균 원자간 거리는 변하지 않습니다.
+          </p>
+          <p class="text-[11px] text-emerald-300">
+            하지만 실제 원자간 결합은 <strong>전자 구름의 Pauli 척력 (1/r¹²)이 인력 (1/r⁶)보다 훨씬 급격하여 우물이 비대칭(Asymmetric)</strong>입니다. 따라서 온도가 상승해 고에너지 상태가 될수록 원자는 우측(더 먼 거리)으로 치우치며 진동하므로 <strong>평균 원자간 거리가 팽창(열팽창)</strong>하게 됩니다.
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Visualizations Panel (Right / Col-8) -->
+    <div class="lg:col-span-8 flex flex-col gap-4">
+      
+      <!-- Top: 2D Atom Vibration Animation Canvas -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">2D 원자 진동 & 비대칭 열팽창 실시간 시각화</h3>
+          </div>
+          <div class="flex items-center gap-3 text-[11px]">
+            <span class="flex items-center gap-1 text-slate-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span> 고정 기준 원자
+            </span>
+            <span class="flex items-center gap-1 text-emerald-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> 진동 원자
+            </span>
+            <span class="flex items-center gap-1 text-amber-400">
+              <span class="w-2 h-0.5 bg-amber-400 inline-block"></span> 평균 거리 (<span class="mono">r_avg</span>)
+            </span>
+          </div>
+        </div>
+        <div class="relative w-full h-44 bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80">
+          <canvas id="canvasAtom" class="w-full h-full block"></canvas>
+        </div>
+      </div>
+
+      <!-- Bottom: Potential E(r) and Force F(r) Curves Canvas -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col flex-1">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i>
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">레너드-존스 위치에너지 E(r) & 알짜 힘 F(r) 그래프</h3>
+          </div>
+          <div class="flex items-center gap-3 text-[11px]">
+            <label class="flex items-center gap-1 text-cyan-400 cursor-pointer">
+              <input type="checkbox" id="showEnergy" checked class="rounded border-slate-700 bg-slate-800">
+              <span>위치에너지 E(r)</span>
+            </label>
+            <label class="flex items-center gap-1 text-rose-400 cursor-pointer">
+              <input type="checkbox" id="showForce" checked class="rounded border-slate-700 bg-slate-800">
+              <span>알짜 힘 F(r) = -dE/dr</span>
+            </label>
+            <label class="flex items-center gap-1 text-amber-400 cursor-pointer">
+              <input type="checkbox" id="showThermalBand" checked class="rounded border-slate-700 bg-slate-800">
+              <span>온도별 진동 범위 [r_min, r_max]</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="relative w-full h-72 sm:h-80 bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80">
+          <canvas id="canvasGraph" class="w-full h-full block"></canvas>
+        </div>
+
+        <!-- Formula Callout -->
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-400">
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/60 mono">
+            <span class="text-cyan-400 font-semibold">E(r) = 4ε [ (σ/r)¹² - (σ/r)⁶ ]</span>
+            <span class="text-slate-500 block text-[10px] mt-0.5">r¹²: Pauli 배타원리 척력 | r⁶: 유도 쌍극자 인력</span>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/60 mono">
+            <span class="text-rose-400 font-semibold">F(r) = (24ε/r) [ 2(σ/r)¹² - (σ/r)⁶ ]</span>
+            <span class="text-slate-500 block text-[10px] mt-0.5">F(r₀) = 0 (평형점), F > 0 (척력), F < 0 (인력)</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Script Logic -->
+  <script>
+    // Lucide Icons initialization
+    lucide.createIcons();
+
+    // Physics Parameters State
+    const state = {
+      preset: 'metallic',
+      epsilon: 1.8, // eV
+      sigma: 0.25,  // nm
+      temperature: 300, // K
+      isPlaying: true,
+      time: 0,
+      showEnergy: true,
+      showForce: true,
+      showThermalBand: true,
+      atomOscillationPhase: 0
+    };
+
+    const presets = {
+      ionic: { epsilon: 3.8, sigma: 0.23, name: '이온 결합 (Ionic)' },
+      covalent: { epsilon: 5.2, sigma: 0.20, name: '공유 결합 (Covalent)' },
+      metallic: { epsilon: 1.8, sigma: 0.25, name: '금속 결합 (Metallic)' },
+      vdw: { epsilon: 0.35, sigma: 0.34, name: '반데르발스 결합 (Van der Waals)' }
+    };
+
+    // DOM Elements
+    const presetSelect = document.getElementById('presetSelect');
+    const tempSlider = document.getElementById('tempSlider');
+    const tempValue = document.getElementById('tempValue');
+    const epsilonSlider = document.getElementById('epsilonSlider');
+    const epsilonValue = document.getElementById('epsilonValue');
+    const sigmaSlider = document.getElementById('sigmaSlider');
+    const sigmaValue = document.getElementById('sigmaValue');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const playText = document.getElementById('playText');
+    const playIcon = document.getElementById('playIcon');
+    const btnReset = document.getElementById('btnReset');
+    const btnCapture = document.getElementById('btnCapture');
+
+    const showEnergyCheck = document.getElementById('showEnergy');
+    const showForceCheck = document.getElementById('showForce');
+    const showThermalBandCheck = document.getElementById('showThermalBand');
+
+    const metricR0 = document.getElementById('metricR0');
+    const metricModulus = document.getElementById('metricModulus');
+    const metricRavg = document.getElementById('metricRavg');
+    const metricExpansion = document.getElementById('metricExpansion');
+    const metricAlpha = document.getElementById('metricAlpha');
+
+    const canvasAtom = document.getElementById('canvasAtom');
+    const ctxAtom = canvasAtom.getContext('2d');
+    const canvasGraph = document.getElementById('canvasGraph');
+    const ctxGraph = canvasGraph.getContext('2d');
+
+    // Physical Calculations
+    const kB = 8.617333262145e-5; // eV / K
+
+    function getLJ_Energy(r, eps, sig) {
+      if (r <= 0) return Infinity;
+      const sr6 = Math.pow(sig / r, 6);
+      return 4 * eps * (sr6 * sr6 - sr6);
+    }
+
+    function getLJ_Force(r, eps, sig) {
+      if (r <= 0) return Infinity;
+      const sr6 = Math.pow(sig / r, 6);
+      return (24 * eps / r) * (2 * sr6 * sr6 - sr6);
+    }
+
+    function calculateMetrics() {
+      const eps = state.epsilon;
+      const sig = state.sigma;
+      const r0 = Math.pow(2, 1/6) * sig; // Minimum of LJ well
+
+      // Curvature at r0: d2E/dr2 at r0 = 72 * 2^(1/3) * eps / sig^2
+      // Converting to representative Young's Modulus proxy (GPa)
+      const curvature = (72 * Math.pow(2, 1/3) * eps) / (sig * sig);
+      const E_proxy = (curvature * 1.602e-19 / (1e-18 * 1e-9 * 1e9)) * 0.08; // scaled nicely to 30~500 GPa
+
+      // Thermal Energy
+      const thermalEnergy = kB * state.temperature;
+      const currentLevel = -eps + thermalEnergy;
+
+      // Find vibration turning points r_min and r_max where E(r) = currentLevel
+      let r_min = r0 * 0.95;
+      let r_max = r0 * 1.05;
+
+      if (state.temperature > 0) {
+        // Simple bisection for r_min (between 0.7*sig and r0)
+        let low = sig * 0.75, high = r0;
+        for (let i = 0; i < 30; i++) {
+          let mid = (low + high) / 2;
+          let val = getLJ_Energy(mid, eps, sig);
+          if (val > currentLevel) low = mid;
+          else high = mid;
+        }
+        r_min = (low + high) / 2;
+
+        // Bisection for r_max (between r0 and 3*sig)
+        low = r0; high = sig * 3.0;
+        for (let i = 0; i < 30; i++) {
+          let mid = (low + high) / 2;
+          let val = getLJ_Energy(mid, eps, sig);
+          if (val < currentLevel) low = mid;
+          else high = mid;
+        }
+        r_max = (low + high) / 2;
+      } else {
+        r_min = r0;
+        r_max = r0;
+      }
+
+      // Asymmetric average due to potential well asymmetry
+      // Boltzmann average proxy: turning points midpoint + Boltzmann skew factor
+      const r_avg = state.temperature === 0 ? r0 : (r_min + r_max) / 2;
+      const deltaR = r_avg - r0;
+      const expansionPercent = (deltaR / r0) * 100;
+      const alphaVal = state.temperature > 0 ? ((deltaR / r0) / state.temperature) * 1e6 : (15 / eps);
+
+      return {
+        r0,
+        E_proxy: Math.max(10, Math.min(800, E_proxy)),
+        r_min,
+        r_max,
+        r_avg,
+        deltaR,
+        expansionPercent,
+        alphaVal: Math.max(1, Math.min(80, alphaVal)),
+        currentLevel
+      };
+    }
+
+    function updateMetricUI(metrics) {
+      metricR0.innerHTML = `${metrics.r0.toFixed(3)} <span class="text-xs text-slate-400 font-normal">nm</span>`;
+      metricModulus.innerHTML = `${metrics.E_proxy.toFixed(1)} <span class="text-xs text-slate-400 font-normal">GPa</span>`;
+      metricRavg.innerHTML = `${metrics.r_avg.toFixed(3)} <span class="text-xs text-slate-400 font-normal">nm</span>`;
+      metricExpansion.innerHTML = `${metrics.expansionPercent.toFixed(2)} <span class="text-xs text-slate-400 font-normal">%</span>`;
+      metricAlpha.textContent = `선팽창계수 α: ${metrics.alphaVal.toFixed(1)} × 10⁻⁶/K`;
+    }
+
+    // High DPI Canvas Scaling
+    function resizeCanvas(canvas, ctx) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      return { width: rect.width, height: rect.height };
+    }
+
+    // Render 2D Atom Vibration Canvas
+    function renderAtomCanvas(metrics) {
+      const { width, height } = resizeCanvas(canvasAtom, ctxAtom);
+      ctxAtom.clearRect(0, 0, width, height);
+
+      const centerY = height / 2;
+      const leftAtomX = width * 0.22;
+      const atomRadius = Math.min(32, height * 0.2);
+
+      // Scale nm to pixels
+      // Let r0 map to about width * 0.35
+      const pxPerNm = (width * 0.40) / metrics.r0;
+
+      // Equilibrium position
+      const r0_px = metrics.r0 * pxPerNm;
+      const rAvg_px = metrics.r_avg * pxPerNm;
+
+      // Current dynamic displacement in vibration
+      const amplitude_px = ((metrics.r_max - metrics.r_min) / 2) * pxPerNm;
+      
+      // Asymmetric oscillation: map [-1, 1] sin wave to [r_min, r_max]
+      const sinVal = Math.sin(state.atomOscillationPhase);
+      const currentR = state.temperature === 0 ? metrics.r0 : (metrics.r_min + (metrics.r_max - metrics.r_min) * (0.5 + 0.5 * sinVal));
+      const rightAtomX = leftAtomX + currentR * pxPerNm;
+
+      // Draw Background grid / guides
+      ctxAtom.strokeStyle = '#1e293b';
+      ctxAtom.lineWidth = 1;
+      ctxAtom.setLineDash([3, 3]);
+      ctxAtom.beginPath();
+      ctxAtom.moveTo(0, centerY);
+      ctxAtom.lineTo(width, centerY);
+      ctxAtom.stroke();
+
+      // Guide line for r0 (Equilibrium distance at 0K)
+      const r0MarkerX = leftAtomX + r0_px;
+      ctxAtom.strokeStyle = '#38bdf8';
+      ctxAtom.lineWidth = 1.5;
+      ctxAtom.setLineDash([4, 4]);
+      ctxAtom.beginPath();
+      ctxAtom.moveTo(r0MarkerX, centerY - 50);
+      ctxAtom.lineTo(r0MarkerX, centerY + 50);
+      ctxAtom.stroke();
+
+      ctxAtom.fillStyle = '#38bdf8';
+      ctxAtom.font = '10px JetBrains Mono';
+      ctxAtom.fillText('r₀ (0K 평형)', r0MarkerX - 25, centerY - 55);
+
+      // Guide line for r_avg (Current average distance at T)
+      if (state.temperature > 0) {
+        const rAvgMarkerX = leftAtomX + rAvg_px;
+        ctxAtom.strokeStyle = '#f59e0b';
+        ctxAtom.lineWidth = 2;
+        ctxAtom.setLineDash([2, 2]);
+        ctxAtom.beginPath();
+        ctxAtom.moveTo(rAvgMarkerX, centerY - 45);
+        ctxAtom.lineTo(rAvgMarkerX, centerY + 45);
+        ctxAtom.stroke();
+
+        ctxAtom.fillStyle = '#f59e0b';
+        ctxAtom.fillText('r_avg (열팽창)', rAvgMarkerX + 4, centerY - 48);
+
+        // Thermal expansion delta arrow
+        ctxAtom.setLineDash([]);
+        ctxAtom.strokeStyle = '#f43f5e';
+        ctxAtom.lineWidth = 2;
+        ctxAtom.beginPath();
+        ctxAtom.moveTo(r0MarkerX, centerY + 35);
+        ctxAtom.lineTo(rAvgMarkerX, centerY + 35);
+        ctxAtom.stroke();
+        ctxAtom.fillStyle = '#f43f5e';
+        ctxAtom.fillText(`+${metrics.expansionPercent.toFixed(2)}%`, (r0MarkerX + rAvgMarkerX)/2 - 15, centerY + 48);
+      }
+
+      ctxAtom.setLineDash([]);
+
+      // Draw Spring between atoms
+      const springStart = leftAtomX + atomRadius;
+      const springEnd = rightAtomX - atomRadius;
+      const springLength = springEnd - springStart;
+      const coils = 12;
+      const coilAmp = 12;
+
+      ctxAtom.strokeStyle = '#94a3b8';
+      ctxAtom.lineWidth = 2.5;
+      ctxAtom.beginPath();
+      ctxAtom.moveTo(springStart, centerY);
+      for (let i = 0; i <= coils; i++) {
+        const x = springStart + (springLength / coils) * i;
+        const y = i === 0 || i === coils ? centerY : centerY + (i % 2 === 0 ? -coilAmp : coilAmp);
+        ctxAtom.lineTo(x, y);
+      }
+      ctxAtom.stroke();
+
+      // Left Atom (Fixed Anchor)
+      const gradLeft = ctxAtom.createRadialGradient(leftAtomX - 5, centerY - 5, 2, leftAtomX, centerY, atomRadius);
+      gradLeft.addColorStop(0, '#94a3b8');
+      gradLeft.addColorStop(1, '#334155');
+      ctxAtom.beginPath();
+      ctxAtom.arc(leftAtomX, centerY, atomRadius, 0, Math.PI * 2);
+      ctxAtom.fillStyle = gradLeft;
+      ctxAtom.fill();
+      ctxAtom.strokeStyle = '#64748b';
+      ctxAtom.lineWidth = 2;
+      ctxAtom.stroke();
+
+      ctxAtom.fillStyle = '#f8fafc';
+      ctxAtom.font = 'bold 11px Pretendard';
+      ctxAtom.textAlign = 'center';
+      ctxAtom.textBaseline = 'middle';
+      ctxAtom.fillText('Atom A', leftAtomX, centerY);
+
+      // Right Atom (Oscillating)
+      const gradRight = ctxAtom.createRadialGradient(rightAtomX - 5, centerY - 5, 2, rightAtomX, centerY, atomRadius);
+      gradRight.addColorStop(0, '#34d399');
+      gradRight.addColorStop(0.7, '#059669');
+      gradRight.addColorStop(1, '#064e3b');
+      ctxAtom.beginPath();
+      ctxAtom.arc(rightAtomX, centerY, atomRadius, 0, Math.PI * 2);
+      ctxAtom.fillStyle = gradRight;
+      ctxAtom.fill();
+      ctxAtom.strokeStyle = '#10b981';
+      ctxAtom.lineWidth = 2;
+      ctxAtom.stroke();
+
+      ctxAtom.fillStyle = '#ffffff';
+      ctxAtom.fillText('Atom B', rightAtomX, centerY);
+
+      // Dynamic distance readout
+      ctxAtom.font = '11px JetBrains Mono';
+      ctxAtom.fillStyle = '#e2e8f0';
+      ctxAtom.fillText(`r(t) = ${currentR.toFixed(3)} nm`, (leftAtomX + rightAtomX) / 2, centerY - 24);
+    }
+
+    // Render Potential & Force Graphs Canvas
+    function renderGraphCanvas(metrics) {
+      const { width, height } = resizeCanvas(canvasGraph, ctxGraph);
+      ctxGraph.clearRect(0, 0, width, height);
+
+      const margin = { top: 25, right: 35, bottom: 40, left: 55 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+
+      // X-range: r from 0.8 * sigma to 2.8 * sigma
+      const rMinGraph = state.sigma * 0.82;
+      const rMaxGraph = state.sigma * 2.4;
+
+      // Energy Y-range: from -1.3 * epsilon to 1.5 * epsilon
+      const eMinGraph = -state.epsilon * 1.35;
+      const eMaxGraph = state.epsilon * 1.5;
+
+      // Force Y-range: scaled
+      const fMaxGraph = (state.epsilon / state.sigma) * 6;
+      const fMinGraph = -fMaxGraph * 0.6;
+
+      function toScreenX(r) {
+        return margin.left + ((r - rMinGraph) / (rMaxGraph - rMinGraph)) * plotW;
+      }
+      function toScreenY_E(E) {
+        return margin.top + plotH - ((E - eMinGraph) / (eMaxGraph - eMinGraph)) * plotH;
+      }
+      function toScreenY_F(F) {
+        return margin.top + plotH - ((F - fMinGraph) / (fMaxGraph - fMinGraph)) * plotH;
+      }
+
+      // Background Grid
+      ctxGraph.strokeStyle = '#1e293b';
+      ctxGraph.lineWidth = 1;
+      ctxGraph.beginPath();
+      for (let i = 0; i <= 5; i++) {
+        const y = margin.top + (plotH / 5) * i;
+        ctxGraph.moveTo(margin.left, y);
+        ctxGraph.lineTo(margin.left + plotW, y);
+      }
+      for (let i = 0; i <= 6; i++) {
+        const x = margin.left + (plotW / 6) * i;
+        ctxGraph.moveTo(x, margin.top);
+        ctxGraph.lineTo(x, margin.top + plotH);
+      }
+      ctxGraph.stroke();
+
+      // Zero Axis for Energy (E = 0)
+      const zeroEY = toScreenY_E(0);
+      ctxGraph.strokeStyle = '#475569';
+      ctxGraph.lineWidth = 1.5;
+      ctxGraph.beginPath();
+      ctxGraph.moveTo(margin.left, zeroEY);
+      ctxGraph.lineTo(margin.left + plotW, zeroEY);
+      ctxGraph.stroke();
+
+      // Zero Axis Label
+      ctxGraph.fillStyle = '#64748b';
+      ctxGraph.font = '10px JetBrains Mono';
+      ctxGraph.textAlign = 'right';
+      ctxGraph.fillText('0.0 eV', margin.left - 8, zeroEY + 3);
+
+      // Thermal Energy Level & Vibration Range Band
+      if (state.showThermalBand && state.temperature > 0) {
+        const eLevelY = toScreenY_E(metrics.currentLevel);
+        const x1 = toScreenX(metrics.r_min);
+        const x2 = toScreenX(metrics.r_max);
+
+        // Shaded thermal vibration span
+        ctxGraph.fillStyle = 'rgba(245, 158, 11, 0.12)';
+        ctxGraph.fillRect(x1, margin.top, x2 - x1, plotH);
+
+        // Horizontal Energy line
+        ctxGraph.strokeStyle = '#f59e0b';
+        ctxGraph.lineWidth = 2;
+        ctxGraph.setLineDash([4, 3]);
+        ctxGraph.beginPath();
+        ctxGraph.moveTo(x1, eLevelY);
+        ctxGraph.lineTo(x2, eLevelY);
+        ctxGraph.stroke();
+        ctxGraph.setLineDash([]);
+
+        // Label for thermal level
+        ctxGraph.fillStyle = '#f59e0b';
+        ctxGraph.font = '10px JetBrains Mono';
+        ctxGraph.textAlign = 'left';
+        ctxGraph.fillText(`E_thermal = ${metrics.currentLevel.toFixed(2)} eV (T=${state.temperature}K)`, x2 + 6, eLevelY + 3);
+
+        // Turning points markers
+        ctxGraph.fillStyle = '#f59e0b';
+        ctxGraph.beginPath();
+        ctxGraph.arc(x1, eLevelY, 4, 0, Math.PI * 2);
+        ctxGraph.arc(x2, eLevelY, 4, 0, Math.PI * 2);
+        ctxGraph.fill();
+
+        // Vertical lines for r_min, r_max
+        ctxGraph.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+        ctxGraph.setLineDash([2, 2]);
+        ctxGraph.beginPath();
+        ctxGraph.moveTo(x1, eLevelY); ctxGraph.lineTo(x1, margin.top + plotH);
+        ctxGraph.moveTo(x2, eLevelY); ctxGraph.lineTo(x2, margin.top + plotH);
+        ctxGraph.stroke();
+        ctxGraph.setLineDash([]);
+      }
+
+      // Draw Energy Curve E(r)
+      if (state.showEnergy) {
+        ctxGraph.strokeStyle = '#38bdf8';
+        ctxGraph.lineWidth = 2.5;
+        ctxGraph.beginPath();
+        const steps = 300;
+        let started = false;
+        for (let i = 0; i <= steps; i++) {
+          const r = rMinGraph + (i / steps) * (rMaxGraph - rMinGraph);
+          const E = getLJ_Energy(r, state.epsilon, state.sigma);
+          if (E < eMaxGraph * 1.5 && E > eMinGraph * 1.5) {
+            const sx = toScreenX(r);
+            const sy = toScreenY_E(E);
+            if (!started) { ctxGraph.moveTo(sx, sy); started = true; }
+            else { ctxGraph.lineTo(sx, sy); }
+          }
+        }
+        ctxGraph.stroke();
+      }
+
+      // Draw Force Curve F(r)
+      if (state.showForce) {
+        ctxGraph.strokeStyle = '#f43f5e';
+        ctxGraph.lineWidth = 2;
+        ctxGraph.beginPath();
+        const steps = 300;
+        let started = false;
+        for (let i = 0; i <= steps; i++) {
+          const r = rMinGraph + (i / steps) * (rMaxGraph - rMinGraph);
+          const F = getLJ_Force(r, state.epsilon, state.sigma);
+          if (F < fMaxGraph * 1.5 && F > fMinGraph * 1.5) {
+            const sx = toScreenX(r);
+            const sy = toScreenY_F(F);
+            if (!started) { ctxGraph.moveTo(sx, sy); started = true; }
+            else { ctxGraph.lineTo(sx, sy); }
+          }
+        }
+        ctxGraph.stroke();
+      }
+
+      // Equilibrium Distance r0 Line & Label
+      const r0X = toScreenX(metrics.r0);
+      const minEY = toScreenY_E(-state.epsilon);
+
+      ctxGraph.strokeStyle = '#10b981';
+      ctxGraph.lineWidth = 1.5;
+      ctxGraph.setLineDash([3, 3]);
+      ctxGraph.beginPath();
+      ctxGraph.moveTo(r0X, margin.top);
+      ctxGraph.lineTo(r0X, margin.top + plotH);
+      ctxGraph.stroke();
+      ctxGraph.setLineDash([]);
+
+      // Point at minimum
+      ctxGraph.fillStyle = '#10b981';
+      ctxGraph.beginPath();
+      ctxGraph.arc(r0X, minEY, 5, 0, Math.PI * 2);
+      ctxGraph.fill();
+
+      // Average distance r_avg Line
+      if (state.temperature > 0) {
+        const ravgX = toScreenX(metrics.r_avg);
+        ctxGraph.strokeStyle = '#f59e0b';
+        ctxGraph.lineWidth = 2;
+        ctxGraph.setLineDash([2, 2]);
+        ctxGraph.beginPath();
+        ctxGraph.moveTo(ravgX, margin.top);
+        ctxGraph.lineTo(ravgX, margin.top + plotH);
+        ctxGraph.stroke();
+        ctxGraph.setLineDash([]);
+
+        ctxGraph.fillStyle = '#f59e0b';
+        ctxGraph.font = '10px JetBrains Mono';
+        ctxGraph.textAlign = 'center';
+        ctxGraph.fillText(`r_avg = ${metrics.r_avg.toFixed(3)}`, ravgX, margin.top + 14);
+      }
+
+      // Axes & Labels
+      ctxGraph.fillStyle = '#94a3b8';
+      ctxGraph.font = '11px JetBrains Mono';
+      ctxGraph.textAlign = 'center';
+      ctxGraph.fillText('원자간 거리 r (nm)', margin.left + plotW / 2, height - 10);
+
+      ctxGraph.textAlign = 'center';
+      ctxGraph.fillText(`r₀ = ${metrics.r0.toFixed(3)}`, r0X, height - 25);
+
+      // Y-axis labels
+      ctxGraph.save();
+      ctxGraph.translate(16, margin.top + plotH / 2);
+      ctxGraph.rotate(-Math.PI / 2);
+      ctxGraph.fillStyle = '#38bdf8';
+      ctxGraph.font = '11px Pretendard';
+      ctxGraph.fillText('위치에너지 E(r) [eV]', 0, 0);
+      ctxGraph.restore();
+
+      ctxGraph.save();
+      ctxGraph.translate(width - 10, margin.top + plotH / 2);
+      ctxGraph.rotate(Math.PI / 2);
+      ctxGraph.fillStyle = '#f43f5e';
+      ctxGraph.font = '11px Pretendard';
+      ctxGraph.fillText('알짜 힘 F(r) [a.u.]', 0, 0);
+      ctxGraph.restore();
+    }
+
+    // Main Update Loop
+    function loop() {
+      const metrics = calculateMetrics();
+      updateMetricUI(metrics);
+
+      if (state.isPlaying) {
+        // Oscillation frequency proportional to sqrt(E_proxy)
+        const omega = 0.05 + Math.sqrt(metrics.E_proxy) * 0.006;
+        state.atomOscillationPhase += omega;
+      }
+
+      renderAtomCanvas(metrics);
+      renderGraphCanvas(metrics);
+
+      requestAnimationFrame(loop);
+    }
+
+    // Event Handlers
+    presetSelect.addEventListener('change', (e) => {
+      const key = e.target.value;
+      if (presets[key]) {
+        state.preset = key;
+        state.epsilon = presets[key].epsilon;
+        state.sigma = presets[key].sigma;
+        epsilonSlider.value = state.epsilon;
+        sigmaSlider.value = state.sigma;
+        epsilonValue.textContent = `${state.epsilon.toFixed(2)} eV`;
+        sigmaValue.textContent = `${state.sigma.toFixed(2)} nm`;
+      }
+    });
+
+    tempSlider.addEventListener('input', (e) => {
+      state.temperature = parseFloat(e.target.value);
+      tempValue.textContent = `${state.temperature} K`;
+    });
+
+    epsilonSlider.addEventListener('input', (e) => {
+      state.epsilon = parseFloat(e.target.value);
+      epsilonValue.textContent = `${state.epsilon.toFixed(2)} eV`;
+      presetSelect.value = 'custom';
+    });
+
+    sigmaSlider.addEventListener('input', (e) => {
+      state.sigma = parseFloat(e.target.value);
+      sigmaValue.textContent = `${state.sigma.toFixed(2)} nm`;
+      presetSelect.value = 'custom';
+    });
+
+    showEnergyCheck.addEventListener('change', (e) => { state.showEnergy = e.target.checked; });
+    showForceCheck.addEventListener('change', (e) => { state.showForce = e.target.checked; });
+    showThermalBandCheck.addEventListener('change', (e) => { state.showThermalBand = e.target.checked; });
+
+    btnPlayPause.addEventListener('click', () => {
+      state.isPlaying = !state.isPlaying;
+      playText.textContent = state.isPlaying ? '일시정지' : '진동 애니메이션 시작';
+      playIcon.setAttribute('data-lucide', state.isPlaying ? 'pause' : 'play');
+      lucide.createIcons();
+    });
+
+    btnReset.addEventListener('click', () => {
+      state.preset = 'metallic';
+      state.epsilon = presets.metallic.epsilon;
+      state.sigma = presets.metallic.sigma;
+      state.temperature = 300;
+      presetSelect.value = 'metallic';
+      tempSlider.value = 300;
+      tempValue.textContent = '300 K';
+      epsilonSlider.value = state.epsilon;
+      epsilonValue.textContent = `${state.epsilon.toFixed(2)} eV`;
+      sigmaSlider.value = state.sigma;
+      sigmaValue.textContent = `${state.sigma.toFixed(2)} nm`;
+    });
+
+    // Capture feature for PDF report
+    btnCapture.addEventListener('click', () => {
+      const dataUrl = canvasGraph.toDataURL('image/png');
+      const win = window.open('');
+      win.document.write(`
+        <html>
+        <head><title>시뮬레이션 그래프 캡처 (보고서 첨부용)</title></head>
+        <body style="background:#0f172a; color:#f8fafc; font-family:sans-serif; text-align:center; padding:20px;">
+          <h2>📸 Lennard-Jones 위치에너지 및 열팽창 그래프 캡처</h2>
+          <p>마우스 우클릭 후 <strong>'이미지 복사'</strong> 또는 <strong>'다른 이름으로 저장'</strong>하여 PDF 보고서에 삽입하세요.</p>
+          <img src="${dataUrl}" style="max-width:90%; border:1px solid #334155; border-radius:12px; margin-top:15px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"/>
+          <div style="margin-top:20px; font-size:13px; color:#94a3b8;">
+            현재 파라미터: 결합종류=${state.preset}, ε=${state.epsilon}eV, σ=${state.sigma}nm, T=${state.temperature}K
+          </div>
+        </body>
+        </html>
+      `);
+    });
+
+    // Window resize handling
+    window.addEventListener('resize', () => {
+      // automatically handled in RAF
+    });
+
+    // Start
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

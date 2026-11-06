@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Three.js 3D 결정구조 & 밀러지수 / 슬립계 탐색기</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    input[type=range] { accent-color: #8b5cf6; }
+    .preset-btn.active {
+      background-color: rgba(147, 51, 234, 0.2);
+      border-color: #a855f7;
+    }
+    .preset-btn {
+      background-color: #0f172a;
+      border-color: #334155;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400">
+        <i data-lucide="box" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30">Module 03</span>
+          <h1 class="text-lg md:text-xl font-bold text-white tracking-tight">3D 결정구조 & 밀러(밀러-브라베) 지수 / 슬립계 탐색기</h1>
+        </div>
+        <p class="text-xs text-slate-400">SC·BCC·FCC(3축 밀러) & HCP(4축 밀러-브라베 hkil / uvtw) · 3D 평면 절단 · 슬립계 분석</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btnCapture" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>
+        <span>3D 뷰 캡처</span>
+      </button>
+      <button id="btnResetView" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        <span>시점 초기화</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Metric Overview Cards -->
+  <section class="px-6 pt-5 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-w-7xl mx-auto w-full">
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase text-slate-400">단위격자 당 원자 수 (N)</div>
+      <div class="text-xl font-bold text-purple-400 mono mt-0.5" id="metricN">4 <span class="text-xs text-slate-400 font-normal">atoms/cell</span></div>
+      <div class="text-[10px] text-slate-500 mt-1" id="metricNFormula">8×(1/8) + 6×(1/2) = 4</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase text-slate-400">배위수 (Coordination, CN)</div>
+      <div class="text-xl font-bold text-cyan-400 mono mt-0.5" id="metricCN">12</div>
+      <div class="text-[10px] text-slate-500 mt-1">인접 최단거리 원자 접촉 수</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase text-slate-400">원자 충진율 (APF)</div>
+      <div class="text-xl font-bold text-emerald-400 mono mt-0.5" id="metricAPF">0.74 <span class="text-xs text-slate-400 font-normal">(74%)</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">최밀충진 (Close-Packed)</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase text-slate-400">면간거리 (d)</div>
+      <div class="text-xl font-bold text-amber-400 mono mt-0.5" id="metricDhkl">0.208 <span class="text-xs text-slate-400 font-normal">nm</span></div>
+      <div class="text-[10px] text-slate-500 mt-1 mono" id="metricDFormula">d = a / √(h²+k²+l²)</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl col-span-2 sm:col-span-4 lg:col-span-1">
+      <div class="text-[10px] font-semibold uppercase text-slate-400">독립 슬립계 수 (Slip Systems)</div>
+      <div class="text-xl font-bold text-rose-400 mono mt-0.5" id="metricSlipCount">12 <span class="text-xs text-slate-400 font-normal">systems</span></div>
+      <div class="text-[10px] text-slate-500 mt-1" id="metricSlipSubtext">{111} &lt;110&gt; (우수한 상온 연성)</div>
+    </div>
+  </section>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 px-6 py-5 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- 3D Viewport (Col-8) -->
+    <div class="lg:col-span-8 flex flex-col gap-4">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col flex-1 relative">
+        
+        <!-- Viewport Header Overlay -->
+        <div class="flex items-center justify-between mb-2 z-10">
+          <div class="flex items-center gap-2">
+            <i data-lucide="orbit" class="w-4 h-4 text-purple-400"></i>
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">Three.js Interactive 3D Canvas</h3>
+          </div>
+          <div class="flex items-center gap-2 text-[11px] text-slate-400">
+            <span>🖱️ 마우스 좌클릭: 회전</span>
+            <span>·</span>
+            <span>우클릭: 이동</span>
+            <span>·</span>
+            <span>휠: 확대/축소</span>
+          </div>
+        </div>
+
+        <!-- 3D Container -->
+        <div id="threeContainer" class="relative w-full h-[520px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 cursor-grab active:cursor-grabbing">
+          <!-- Compass / Axis Overlay Widget -->
+          <div class="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur border border-slate-800 px-2.5 py-1.5 rounded-lg text-[10px] mono text-slate-300 flex items-center gap-2 pointer-events-none" id="axisLegend">
+            <span class="text-red-400">X [100]</span>
+            <span class="text-green-400">Y [010]</span>
+            <span class="text-blue-400">Z [001]</span>
+          </div>
+
+          <!-- Active Miller Indices Tag -->
+          <div class="absolute top-3 right-3 bg-slate-900/85 backdrop-blur border border-purple-500/40 px-3 py-1.5 rounded-lg text-xs mono text-purple-300 flex items-center gap-2 shadow-lg">
+            <span>Plane: <strong id="tagPlane">(1 1 1)</strong></span>
+            <span>|</span>
+            <span>Dir: <strong id="tagDir">[1 1 0]</strong></span>
+          </div>
+        </div>
+
+        <!-- Structure Quick Info Bar -->
+        <div class="mt-3 flex flex-wrap justify-between items-center text-xs text-slate-400 border-t border-slate-800 pt-3">
+          <span id="structureTitle" class="font-semibold text-slate-200">Face-Centered Cubic (FCC, 면심입방구조)</span>
+          <span class="mono text-[11px] text-slate-400" id="latticeParam">격자상수 a = 0.361 nm (Cu 기준)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Panel (Col-4) -->
+    <aside class="lg:col-span-4 flex flex-col gap-4">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2 border-b border-slate-800 pb-3">
+          <i data-lucide="sliders" class="w-4 h-4 text-purple-400"></i>
+          결정학 모델 & 지수 제어
+        </h2>
+
+        <!-- 1. Crystal Structure Preset -->
+        <div>
+          <label class="text-xs font-medium text-slate-300 block mb-1.5">결정구조 선택 (Crystal Structure)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button class="preset-btn py-2 px-3 rounded-lg border text-xs font-semibold text-left transition" data-struct="sc">
+              <div class="text-slate-200">SC (단순입방)</div>
+              <div class="text-[10px] text-slate-400 font-normal">3축 밀러 | APF: 0.52</div>
+            </button>
+            <button class="preset-btn py-2 px-3 rounded-lg border text-xs font-semibold text-left transition" data-struct="bcc">
+              <div class="text-slate-200">BCC (체심입방)</div>
+              <div class="text-[10px] text-slate-400 font-normal">3축 밀러 | APF: 0.68</div>
+            </button>
+            <button class="preset-btn active py-2 px-3 rounded-lg border text-xs font-semibold text-left transition" data-struct="fcc">
+              <div class="text-slate-200">FCC (면심입방)</div>
+              <div class="text-[10px] text-slate-400 font-normal">3축 밀러 | APF: 0.74</div>
+            </button>
+            <button class="preset-btn py-2 px-3 rounded-lg border text-xs font-semibold text-left transition" data-struct="hcp">
+              <div class="text-slate-200 text-amber-300 flex items-center gap-1">
+                <span>HCP (조밀육각)</span>
+                <span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">4축</span>
+              </div>
+              <div class="text-[10px] text-slate-400 font-normal">4축 밀러-브라베 | APF: 0.74</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Display Modes & Toggles -->
+        <div class="space-y-2.5 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+          <div class="text-xs font-semibold text-slate-300 mb-2">원자 및 격자 시각화 모드</div>
+          
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">원자 크기 모드</span>
+            <div class="flex rounded-lg bg-slate-900 border border-slate-700 p-0.5 text-xs">
+              <button id="btnHardSphere" class="px-2.5 py-1 rounded bg-purple-600 text-white font-medium">Hard Sphere</button>
+              <button id="btnBallStick" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Lattice Node</button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1">
+            <label for="chkInterstitial" class="text-xs text-slate-400 cursor-pointer flex items-center gap-1.5">
+              <span>팔면체 침입형 자리 (Octahedral Sites)</span>
+            </label>
+            <input type="checkbox" id="chkInterstitial" class="rounded border-slate-700 bg-slate-900 text-purple-600">
+          </div>
+
+          <div class="pt-1">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">원자 투명도 (Opacity)</span>
+              <span class="mono text-purple-400 font-semibold" id="valOpacity">0.85</span>
+            </div>
+            <input type="range" id="sliderOpacity" min="0.1" max="1.0" step="0.05" value="0.85" class="w-full">
+          </div>
+        </div>
+
+        <!-- 3. Dynamic Miller Indices Input & Generator (Cubic 3-index vs Hexagonal 4-index) -->
+        <div class="space-y-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-slate-300" id="labelPlaneSection">밀러 평면 (h k l) 입력</div>
+            <button id="btnMillerGuide" class="text-[10px] text-purple-400 hover:underline flex items-center gap-1">
+              <i data-lucide="help-circle" class="w-3 h-3"></i> 표기 원리
+            </button>
+          </div>
+
+          <!-- Plane Inputs (Grid 3 or 4 cols) -->
+          <div id="gridPlaneInputs" class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-[10px] text-slate-400 mono">h</label>
+              <input type="number" id="inputH" value="1" min="-2" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 mono">k</label>
+              <input type="number" id="inputK" value="1" min="-2" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+            </div>
+            <div id="colPlaneI" class="hidden">
+              <label class="text-[10px] text-amber-400 mono">i = -(h+k)</label>
+              <input type="number" id="inputI" value="-2" readonly class="w-full bg-slate-950 border border-amber-500/40 rounded px-2 py-1 text-xs mono text-center text-amber-300 cursor-not-allowed">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 mono">l</label>
+              <input type="number" id="inputL" value="1" min="-2" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+            </div>
+          </div>
+
+          <!-- Direction Vector Inputs -->
+          <div class="pt-2 border-t border-slate-800">
+            <div class="text-xs font-semibold text-slate-300 mb-1.5" id="labelDirSection">방향 지수 [u v w] 입력</div>
+            <div id="gridDirInputs" class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-[10px] text-slate-400 mono" id="labelU">u</label>
+                <input type="number" id="inputU" value="1" min="-3" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+              </div>
+              <div>
+                <label class="text-[10px] text-slate-400 mono" id="labelV">v</label>
+                <input type="number" id="inputV" value="1" min="-3" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+              </div>
+              <div id="colDirT" class="hidden">
+                <label class="text-[10px] text-cyan-400 mono">t = -(u+v)</label>
+                <input type="number" id="inputT" value="-2" readonly class="w-full bg-slate-950 border border-cyan-500/40 rounded px-2 py-1 text-xs mono text-center text-cyan-300 cursor-not-allowed">
+              </div>
+              <div>
+                <label class="text-[10px] text-slate-400 mono" id="labelW">w</label>
+                <input type="number" id="inputW" value="0" min="-3" max="3" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs mono text-center text-slate-100">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Close-Packed Plane & Slip System Preset Buttons (Dynamic) -->
+        <div>
+          <label class="text-xs font-medium text-slate-300 block mb-1.5" id="labelPresetPlanes">주요 조밀면 & 슬립계 원클릭 강조</label>
+          <div id="presetButtonContainer" class="grid grid-cols-3 gap-1.5">
+            <!-- Dynamic Buttons inserted by JS -->
+          </div>
+        </div>
+
+        <!-- 5. Ductility & Slip System Comparison Card -->
+        <div class="text-[11px] text-slate-400 bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-1.5 leading-relaxed" id="slipComparisonCard">
+          <div class="font-semibold text-slate-200 flex items-center gap-1.5">
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-rose-400"></i>
+            FCC vs HCP 소성가공성(연성) 및 지수 체계 비교
+          </div>
+          <p id="descCardText">
+            <strong>FCC:</strong> {111} 면 4개 × &lt;110&gt; 방향 3개 = <strong>총 12개 독립 슬립계</strong>. Von Mises 항복 조건(최소 5개)을 만족하여 극저온에서도 연성이 매우 우수합니다.
+          </p>
+          <p class="text-amber-300/90 text-[10px]" id="descHcpHinter">
+            ※ HCP는 6회 회전 대칭성 유지를 위해 4개의 축(a₁, a₂, a₃, c)을 쓰는 <strong>밀러-브라베 지수 (hkil)</strong>를 사용하며, 항상 <span class="mono">i = -(h+k)</span>와 <span class="mono">t = -(u+v)</span>가 성립합니다.
+          </p>
+        </div>
+
+      </div>
+    </aside>
+  </main>
+
+  <!-- Miller Calculation Step Guide Modal -->
+  <div id="millerModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button id="btnCloseModal" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      
+      <h3 class="text-base font-bold text-white flex items-center gap-2 mb-3">
+        <i data-lucide="book-open" class="w-5 h-5 text-purple-400"></i>
+        결정학 지수 체계: 입방정계 (3축) vs 육방정계 (4축)
+      </h3>
+
+      <div class="space-y-3 text-xs text-slate-300">
+        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+          <div class="font-bold text-purple-400">1. SC / BCC / FCC (3축 밀러 지수)</div>
+          <p class="mt-0.5 text-slate-400">
+            직교하는 3개의 축(x, y, z)에 대한 절편의 역수 비를 가장 작은 정수비 <strong>(h k l)</strong>로 나타내며, 방향은 <strong>[u v w]</strong> 벡터로 표기합니다.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-950 border border-amber-500/40">
+          <div class="font-bold text-amber-300">2. HCP (4축 밀러-브라베 지수, Miller-Bravais Indices)</div>
+          <p class="mt-0.5 text-slate-300 leading-relaxed">
+            육방정계는 기저면에 120° 각도를 이루는 3개의 동일한 축(<strong>a₁, a₂, a₃</strong>)과 수직 축(<strong>c</strong>)을 둡니다.<br>
+            대칭적으로 동등한 프리즘 면들을 동일한 지수 족(Family)으로 일관되게 표현하기 위해 <strong>4개의 수 (h k i l)</strong> 및 방향 <strong>[u v t w]</strong>를 사용합니다.
+          </p>
+          <div class="mt-2 p-2 bg-slate-900 rounded font-mono text-[11px] text-amber-400 space-y-0.5">
+            <div>■ 평면 조건: i = -(h + k)</div>
+            <div>■ 방향 조건: t = -(u + v)</div>
+            <div>■ 면간거리 공식: 1/d² = 4/3·(h² + hk + k²)/a² + l²/c²</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js Interactive Crystallography Script -->
+  <script>
+    lucide.createIcons();
+
+    // Crystallography State
+    const cState = {
+      struct: 'fcc', // 'sc' | 'bcc' | 'fcc' | 'hcp'
+      mode: 'hardSphere', // 'hardSphere' | 'ballStick'
+      showInterstitial: false,
+      atomOpacity: 0.85,
+      // Cubic indices
+      h: 1, k: 1, l: 1,
+      u: 1, v: 1, w: 0,
+      // HCP 4-indices: i = -(h+k), t = -(u+v)
+      i: -2, t: -2
+    };
+
+    const structProps = {
+      sc: {
+        name: 'Simple Cubic (SC, 단순입방구조)',
+        a: 0.25, // nm
+        c: 0.25,
+        N: 1, CN: 6, APF: 0.52,
+        hardRadius: 0.5,
+        NFormula: '8 × (1/8) = 1 atom',
+        slipCount: '3',
+        slipDesc: '{100} <010> (슬립계 부족으로 취성)'
+      },
+      bcc: {
+        name: 'Body-Centered Cubic (BCC, 체심입방구조)',
+        a: 0.287,
+        c: 0.287,
+        N: 2, CN: 8, APF: 0.68,
+        hardRadius: Math.sqrt(3) / 4,
+        NFormula: '8 × (1/8) + 1 = 2 atoms',
+        slipCount: '12 (최대 48)',
+        slipDesc: '{110} <111> (DBTT 연성-취성 천이 존재)'
+      },
+      fcc: {
+        name: 'Face-Centered Cubic (FCC, 면심입방구조)',
+        a: 0.361,
+        c: 0.361,
+        N: 4, CN: 12, APF: 0.74,
+        hardRadius: Math.sqrt(2) / 4,
+        NFormula: '8 × (1/8) + 6 × (1/2) = 4 atoms',
+        slipCount: '12',
+        slipDesc: '{111} <110> (우수한 상온 및 저온 연성)'
+      },
+      hcp: {
+        name: 'Hexagonal Close-Packed (HCP, 조밀육각구조)',
+        a: 0.321, // nm (Mg/Ti)
+        c: 0.321 * 1.633, // c/a = 1.633 -> 0.524 nm
+        N: 6, CN: 12, APF: 0.74,
+        hardRadius: 0.5,
+        NFormula: '12×(1/6) + 2×(1/2) + 3 = 6 atoms',
+        slipCount: '3 (상온)',
+        slipDesc: '{0001} <11-20> (기저면 3개 슬립계로 상온 취성)'
+      }
+    };
+
+    // DOM Elements
+    const container = document.getElementById('threeContainer');
+    const metricN = document.getElementById('metricN');
+    const metricNFormula = document.getElementById('metricNFormula');
+    const metricCN = document.getElementById('metricCN');
+    const metricAPF = document.getElementById('metricAPF');
+    const metricDhkl = document.getElementById('metricDhkl');
+    const metricDFormula = document.getElementById('metricDFormula');
+    const metricSlipCount = document.getElementById('metricSlipCount');
+    const metricSlipSubtext = document.getElementById('metricSlipSubtext');
+    const structureTitle = document.getElementById('structureTitle');
+    const latticeParam = document.getElementById('latticeParam');
+    const tagPlane = document.getElementById('tagPlane');
+    const tagDir = document.getElementById('tagDir');
+    const axisLegend = document.getElementById('axisLegend');
+
+    const labelPlaneSection = document.getElementById('labelPlaneSection');
+    const labelDirSection = document.getElementById('labelDirSection');
+    const gridPlaneInputs = document.getElementById('gridPlaneInputs');
+    const gridDirInputs = document.getElementById('gridDirInputs');
+    const colPlaneI = document.getElementById('colPlaneI');
+    const colDirT = document.getElementById('colDirT');
+    const inputH = document.getElementById('inputH');
+    const inputK = document.getElementById('inputK');
+    const inputI = document.getElementById('inputI');
+    const inputL = document.getElementById('inputL');
+    const inputU = document.getElementById('inputU');
+    const inputV = document.getElementById('inputV');
+    const inputT = document.getElementById('inputT');
+    const inputW = document.getElementById('inputW');
+    const labelU = document.getElementById('labelU');
+    const labelV = document.getElementById('labelV');
+    const labelW = document.getElementById('labelW');
+
+    const presetButtonContainer = document.getElementById('presetButtonContainer');
+    const descCardText = document.getElementById('descCardText');
+
+    const btnHardSphere = document.getElementById('btnHardSphere');
+    const btnBallStick = document.getElementById('btnBallStick');
+    const chkInterstitial = document.getElementById('chkInterstitial');
+    const sliderOpacity = document.getElementById('sliderOpacity');
+    const valOpacity = document.getElementById('valOpacity');
+    const btnResetView = document.getElementById('btnResetView');
+    const btnCapture = document.getElementById('btnCapture');
+
+    const btnMillerGuide = document.getElementById('btnMillerGuide');
+    const millerModal = document.getElementById('millerModal');
+    const btnCloseModal = document.getElementById('btnCloseModal');
+
+    // Three.js Scene Setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020617);
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(2.8, 2.2, 3.2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight1.position.set(5, 10, 7);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.45);
+    dirLight2.position.set(-5, -5, -5);
+    scene.add(dirLight2);
+
+    // Dynamic Groups
+    const latticeGroup = new THREE.Group();
+    scene.add(latticeGroup);
+
+    const planeGroup = new THREE.Group();
+    scene.add(planeGroup);
+
+    const vectorGroup = new THREE.Group();
+    scene.add(vectorGroup);
+
+    // Build Unit Cell Wireframe Box
+    function buildCellBox() {
+      const boxGeom = new THREE.BoxGeometry(1, 1, 1);
+      const wireGeom = new THREE.WireframeGeometry(boxGeom);
+      const wireMat = new THREE.LineBasicMaterial({ color: 0x475569, linewidth: 1.5 });
+      const wire = new THREE.LineSegments(wireGeom);
+      wire.position.set(0.5, 0.5, 0.5);
+      return wire;
+    }
+
+    function getAtomMaterial(colorHex, opacity) {
+      return new THREE.MeshStandardMaterial({
+        color: colorHex,
+        metalness: 0.2,
+        roughness: 0.3,
+        transparent: opacity < 1.0,
+        opacity: opacity
+      });
+    }
+
+    // Switch between 3-index (Cubic) and 4-index (HCP) UI
+    function updateInputModeUI() {
+      const isHcp = cState.struct === 'hcp';
+
+      if (isHcp) {
+        labelPlaneSection.textContent = '밀러-브라베 평면 (h k i l) 4축 입력';
+        labelDirSection.textContent = '밀러-브라베 방향 [u v t w] 4축 입력';
+        gridPlaneInputs.className = 'grid grid-cols-4 gap-1.5';
+        gridDirInputs.className = 'grid grid-cols-4 gap-1.5';
+        colPlaneI.classList.remove('hidden');
+        colDirT.classList.remove('hidden');
+
+        labelU.textContent = 'u';
+        labelV.textContent = 'v';
+        labelW.textContent = 'w';
+
+        axisLegend.innerHTML = `
+          <span class="text-amber-400">a₁</span>
+          <span class="text-emerald-400">a₂</span>
+          <span class="text-cyan-400">a₃</span>
+          <span class="text-blue-400">c [0001]</span>
+        `;
+
+        // Render HCP Quick Presets
+        presetButtonContainer.innerHTML = `
+          <button class="quick-plane-btn py-1.5 px-1 rounded bg-purple-900/60 hover:bg-purple-800 text-[11px] mono border border-purple-500 text-purple-200 text-center" 
+            data-h="0" data-k="0" data-l="1" data-u="1" data-v="1" data-w="0">(0001) 기저면</button>
+          <button class="quick-plane-btn py-1.5 px-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] mono border border-slate-700 text-slate-200 text-center" 
+            data-h="1" data-k="0" data-l="0" data-u="1" data-v="1" data-w="0">(10-10) 주면</button>
+          <button class="quick-plane-btn py-1.5 px-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] mono border border-slate-700 text-slate-200 text-center" 
+            data-h="1" data-k="0" data-l="1" data-u="1" data-v="1" data-w="0">(10-11) 추면</button>
+        `;
+
+        descCardText.innerHTML = `
+          <strong>HCP (밀러-브라베 4축 지수):</strong> 육방정계 120° 대칭성 보존을 위해 4축 <strong>(h k i l)</strong> 표기법을 사용하며 항상 <span class="mono">i = -(h+k)</span>와 <span class="mono">t = -(u+v)</span>가 성립합니다. 상온에서 기저면 {0001}&lt;11-20&gt; <strong>3개 슬립계</strong>만 활성화되어 가공성이 낮습니다.
+        `;
+
+      } else {
+        labelPlaneSection.textContent = '밀러 평면 (h k l) 입력';
+        labelDirSection.textContent = '방향 지수 [u v w] 입력';
+        gridPlaneInputs.className = 'grid grid-cols-3 gap-2';
+        gridDirInputs.className = 'grid grid-cols-3 gap-2';
+        colPlaneI.classList.add('hidden');
+        colDirT.classList.add('hidden');
+
+        labelU.textContent = 'u';
+        labelV.textContent = 'v';
+        labelW.textContent = 'w';
+
+        axisLegend.innerHTML = `
+          <span class="text-red-400">X [100]</span>
+          <span class="text-green-400">Y [010]</span>
+          <span class="text-blue-400">Z [001]</span>
+        `;
+
+        // Render Cubic Quick Presets
+        presetButtonContainer.innerHTML = `
+          <button class="quick-plane-btn py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs mono border border-slate-700 text-slate-200" data-h="1" data-k="0" data-l="0" data-u="0" data-v="1" data-w="0">(100)</button>
+          <button class="quick-plane-btn py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs mono border border-slate-700 text-slate-200" data-h="1" data-k="1" data-l="0" data-u="1" data-v="-1" data-w="0">(110)</button>
+          <button class="quick-plane-btn py-1.5 rounded bg-purple-900/60 hover:bg-purple-800 text-xs mono border border-purple-500 text-purple-200" data-h="1" data-k="1" data-l="1" data-u="1" data-v="1" data-w="0">(111) 조밀면</button>
+        `;
+
+        descCardText.innerHTML = `
+          <strong>${structProps[cState.struct].name}:</strong> 3개의 직교 축(x,y,z)에 대한 표준 3축 밀러 지수 (hkl) 및 [uvw]를 사용합니다.
+        `;
+      }
+
+      // Re-bind quick buttons
+      document.querySelectorAll('.quick-plane-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          inputH.value = btn.getAttribute('data-h');
+          inputK.value = btn.getAttribute('data-k');
+          inputL.value = btn.getAttribute('data-l');
+          inputU.value = btn.getAttribute('data-u');
+          inputV.value = btn.getAttribute('data-v');
+          inputW.value = btn.getAttribute('data-w');
+          onMillerChange();
+        });
+      });
+    }
+
+    // Build Crystal Structure
+    function rebuildStructure() {
+      while(latticeGroup.children.length > 0){ 
+        const obj = latticeGroup.children[0];
+        latticeGroup.remove(obj); 
+      }
+
+      const p = structProps[cState.struct];
+      const isHard = cState.mode === 'hardSphere';
+      const radius = isHard ? p.hardRadius : 0.12;
+      const sphereGeom = new THREE.SphereGeometry(radius, 32, 32);
+
+      const cornerMat = getAtomMaterial(0xa855f7, cState.atomOpacity); // Purple
+      const centerMat = getAtomMaterial(0x38bdf8, cState.atomOpacity); // Cyan
+      const faceMat = getAtomMaterial(0x34d399, cState.atomOpacity);   // Emerald
+      const interMat = getAtomMaterial(0xf43f5e, 0.9);                 // Rose Interstitial
+
+      // 1. SC, BCC, FCC
+      const corners = [
+        [0,0,0], [1,0,0], [0,1,0], [1,1,0],
+        [0,0,1], [1,0,1], [0,1,1], [1,1,1]
+      ];
+
+      if (cState.struct === 'sc' || cState.struct === 'bcc' || cState.struct === 'fcc') {
+        latticeGroup.add(buildCellBox());
+
+        corners.forEach(pos => {
+          const mesh = new THREE.Mesh(sphereGeom, cornerMat);
+          mesh.position.set(...pos);
+          latticeGroup.add(mesh);
+        });
+      }
+
+      // 2. BCC
+      if (cState.struct === 'bcc') {
+        const centerMesh = new THREE.Mesh(sphereGeom, centerMat);
+        centerMesh.position.set(0.5, 0.5, 0.5);
+        latticeGroup.add(centerMesh);
+
+        if (cState.showInterstitial) {
+          const interGeom = new THREE.SphereGeometry(0.06, 16, 16);
+          const faceSites = [
+            [0.5, 0.5, 0], [0.5, 0.5, 1],
+            [0.5, 0, 0.5], [0.5, 1, 0.5],
+            [0.5, 0.5, 0.5], [1, 0.5, 0.5]
+          ];
+          faceSites.forEach(pos => {
+            const m = new THREE.Mesh(interGeom, interMat);
+            m.position.set(...pos);
+            latticeGroup.add(m);
+          });
+        }
+      }
+
+      // 3. FCC
+      if (cState.struct === 'fcc') {
+        const faceCenters = [
+          [0.5, 0.5, 0], [0.5, 0.5, 1],
+          [0.5, 0, 0.5], [0.5, 1, 0.5],
+          [0, 0.5, 0.5], [1, 0.5, 0.5]
+        ];
+        faceCenters.forEach(pos => {
+          const mesh = new THREE.Mesh(sphereGeom, faceMat);
+          mesh.position.set(...pos);
+          latticeGroup.add(mesh);
+        });
+
+        if (cState.showInterstitial) {
+          const interGeom = new THREE.SphereGeometry(0.08, 20, 20);
+          const bodySite = new THREE.Mesh(interGeom, interMat);
+          bodySite.position.set(0.5, 0.5, 0.5);
+          latticeGroup.add(bodySite);
+
+          const edgeSites = [
+            [0.5, 0, 0], [0.5, 1, 0], [0.5, 0, 1], [0.5, 1, 1],
+            [0, 0.5, 0], [1, 0.5, 0], [0, 0.5, 1], [1, 0.5, 1],
+            [0, 0, 0.5], [1, 0, 0.5], [0, 1, 0.5], [1, 1, 0.5]
+          ];
+          edgeSites.forEach(pos => {
+            const m = new THREE.Mesh(interGeom, interMat);
+            m.position.set(...pos);
+            latticeGroup.add(m);
+          });
+        }
+      }
+
+      // 4. HCP Hexagonal Prism & 4-axis Basal Vectors
+      if (cState.struct === 'hcp') {
+        const c_axis = 1.633;
+        const hexRadius = 0.6;
+        const hcpAtomGeom = new THREE.SphereGeometry(isHard ? 0.3 : 0.12, 24, 24);
+
+        // Hexagon wireframe
+        const pts = [];
+        for (let i = 0; i <= 6; i++) {
+          const ang = (i / 6) * Math.PI * 2;
+          pts.push(new THREE.Vector3(Math.cos(ang) * hexRadius + 0.5, 0, Math.sin(ang) * hexRadius + 0.5));
+        }
+        const bottomLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x475569 }));
+        latticeGroup.add(bottomLine);
+
+        const topPts = pts.map(p => new THREE.Vector3(p.x, c_axis, p.z));
+        const topLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(topPts), new THREE.LineBasicMaterial({ color: 0x475569 }));
+        latticeGroup.add(topLine);
+
+        for (let i = 0; i < 6; i++) {
+          const vLineGeom = new THREE.BufferGeometry().setFromPoints([pts[i], topPts[i]]);
+          latticeGroup.add(new THREE.Line(vLineGeom, new THREE.LineBasicMaterial({ color: 0x475569 })));
+        }
+
+        // Draw 3 Basal Axes (a1, a2, a3 at 120 degrees) in bottom plane
+        const baseCenter = new THREE.Vector3(0.5, 0, 0.5);
+        const a1_dir = new THREE.Vector3(hexRadius, 0, 0);
+        const a2_dir = new THREE.Vector3(-hexRadius * 0.5, 0, hexRadius * Math.sqrt(3)/2);
+        const a3_dir = new THREE.Vector3(-hexRadius * 0.5, 0, -hexRadius * Math.sqrt(3)/2);
+
+        latticeGroup.add(new THREE.ArrowHelper(a1_dir.clone().normalize(), baseCenter, hexRadius * 1.15, 0xf59e0b, 0.1, 0.05));
+        latticeGroup.add(new THREE.ArrowHelper(a2_dir.clone().normalize(), baseCenter, hexRadius * 1.15, 0x10b981, 0.1, 0.05));
+        latticeGroup.add(new THREE.ArrowHelper(a3_dir.clone().normalize(), baseCenter, hexRadius * 1.15, 0x06b6d4, 0.1, 0.05));
+        // Vertical c-axis arrow
+        latticeGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), baseCenter, c_axis * 1.08, 0x3b82f6, 0.12, 0.06));
+
+        // Bottom and Top hex atoms
+        for (let i = 0; i < 6; i++) {
+          const ang = (i / 6) * Math.PI * 2;
+          const x = Math.cos(ang) * hexRadius + 0.5;
+          const z = Math.sin(ang) * hexRadius + 0.5;
+
+          const bMesh = new THREE.Mesh(hcpAtomGeom, cornerMat);
+          bMesh.position.set(x, 0, z);
+          latticeGroup.add(bMesh);
+
+          const tMesh = new THREE.Mesh(hcpAtomGeom, cornerMat);
+          tMesh.position.set(x, c_axis, z);
+          latticeGroup.add(tMesh);
+        }
+
+        // Center atoms
+        const bcMesh = new THREE.Mesh(hcpAtomGeom, faceMat);
+        bcMesh.position.set(0.5, 0, 0.5);
+        latticeGroup.add(bcMesh);
+
+        const tcMesh = new THREE.Mesh(hcpAtomGeom, faceMat);
+        tcMesh.position.set(0.5, c_axis, 0.5);
+        latticeGroup.add(tcMesh);
+
+        // 3 Interior atoms at mid-plane (c/2)
+        const midY = c_axis / 2;
+        const midOffsets = [
+          [0.5 + hexRadius * 0.45, midY, 0.5],
+          [0.5 - hexRadius * 0.25, midY, 0.5 + hexRadius * 0.4],
+          [0.5 - hexRadius * 0.25, midY, 0.5 - hexRadius * 0.4]
+        ];
+        midOffsets.forEach(pos => {
+          const m = new THREE.Mesh(hcpAtomGeom, centerMat);
+          m.position.set(...pos);
+          latticeGroup.add(m);
+        });
+      }
+
+      updateInputModeUI();
+      updateMillerPlane();
+      updateDirectionVector();
+      updateMetricsUI();
+    }
+
+    // Slicing Algorithm: Render Miller Plane
+    function updateMillerPlane() {
+      while(planeGroup.children.length > 0){ 
+        planeGroup.remove(planeGroup.children[0]); 
+      }
+
+      let { h, k, l, struct } = cState;
+      if (h === 0 && k === 0 && l === 0) return;
+
+      if (struct !== 'hcp') {
+        // Cubic Unit Cell [0, 1]^3 slicing
+        const d = 1.0;
+        const edges = [
+          [[0,0,0], [1,0,0]], [[1,0,0], [1,0,1]], [[1,0,1], [0,0,1]], [[0,0,1], [0,0,0]],
+          [[0,1,0], [1,1,0]], [[1,1,0], [1,1,1]], [[1,1,1], [0,1,1]], [[0,1,1], [0,1,0]],
+          [[0,0,0], [0,1,0]], [[1,0,0], [1,1,0]], [[1,0,1], [1,1,1]], [[0,0,1], [0,1,1]]
+        ];
+
+        const intersections = [];
+        const eps = 1e-5;
+
+        edges.forEach(([p1, p2]) => {
+          const val1 = h * p1[0] + k * p1[1] + l * p1[2] - d;
+          const val2 = h * p2[0] + k * p2[1] + l * p2[2] - d;
+
+          if (Math.abs(val1) < eps) {
+            intersections.push(new THREE.Vector3(...p1));
+          } else if (val1 * val2 < 0) {
+            const t = val1 / (val1 - val2);
+            const ix = p1[0] + t * (p2[0] - p1[0]);
+            const iy = p1[1] + t * (p2[1] - p1[1]);
+            const iz = p1[2] + t * (p2[2] - p1[2]);
+            intersections.push(new THREE.Vector3(ix, iy, iz));
+          }
+        });
+
+        const uniquePts = [];
+        intersections.forEach(pt => {
+          if (!uniquePts.some(u => u.distanceTo(pt) < 1e-4)) uniquePts.push(pt);
+        });
+
+        if (uniquePts.length >= 3) {
+          const center = new THREE.Vector3();
+          uniquePts.forEach(p => center.add(p));
+          center.divideScalar(uniquePts.length);
+
+          const normal = new THREE.Vector3(h, k, l).normalize();
+          const refVec = new THREE.Vector3().subVectors(uniquePts[0], center).normalize();
+          const binormal = new THREE.Vector3().crossVectors(normal, refVec).normalize();
+
+          uniquePts.sort((a, b) => {
+            const da = new THREE.Vector3().subVectors(a, center);
+            const db = new THREE.Vector3().subVectors(b, center);
+            return Math.atan2(da.dot(binormal), da.dot(refVec)) - Math.atan2(db.dot(binormal), db.dot(refVec));
+          });
+
+          const geom = new THREE.BufferGeometry();
+          const vertices = [];
+          for (let i = 0; i < uniquePts.length; i++) {
+            const next = (i + 1) % uniquePts.length;
+            vertices.push(center.x, center.y, center.z);
+            vertices.push(uniquePts[i].x, uniquePts[i].y, uniquePts[i].z);
+            vertices.push(uniquePts[next].x, uniquePts[next].y, uniquePts[next].z);
+          }
+          geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+          geom.computeVertexNormals();
+
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0xec4899,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.6,
+            roughness: 0.2
+          });
+          planeGroup.add(new THREE.Mesh(geom, mat));
+
+          const outlinePts = [...uniquePts, uniquePts[0]];
+          const outlineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
+          planeGroup.add(new THREE.Line(outlineGeom, new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 2 })));
+        }
+
+      } else {
+        // Hexagonal Prism Slicing for HCP (hkil)
+        const c_axis = 1.633;
+        const hexR = 0.6;
+        const hexPtsBottom = [];
+        const hexPtsTop = [];
+        for (let i = 0; i < 6; i++) {
+          const ang = (i / 6) * Math.PI * 2;
+          hexPtsBottom.push(new THREE.Vector3(Math.cos(ang) * hexR + 0.5, 0, Math.sin(ang) * hexR + 0.5));
+          hexPtsTop.push(new THREE.Vector3(Math.cos(ang) * hexR + 0.5, c_axis, Math.sin(ang) * hexR + 0.5));
+        }
+
+        // 18 edges of hexagonal prism: 6 bottom, 6 top, 6 vertical
+        const hEdges = [];
+        for (let i = 0; i < 6; i++) {
+          const next = (i + 1) % 6;
+          hEdges.push([hexPtsBottom[i], hexPtsBottom[next]]);
+          hEdges.push([hexPtsTop[i], hexPtsTop[next]]);
+          hEdges.push([hexPtsBottom[i], hexPtsTop[i]]);
+        }
+
+        // Cartesian normal vector for HCP plane (h k i l)
+        // With a1 along X, a2 at 120°
+        const i_val = cState.i;
+        // g vector in cartesian coordinates centered at (0.5, 0, 0.5)
+        const nx = h - 0.5 * k - 0.5 * i_val;
+        const nz = (Math.sqrt(3) / 2) * (k - i_val);
+        const ny = (l / c_axis) * hexR * 1.5;
+
+        const normal = new THREE.Vector3(nx, ny, nz).normalize();
+        if (normal.lengthSq() < 1e-4) return;
+
+        // Plane offset so it cuts through unit cell center or intercepts
+        const planeD = 0.5 * nx + 0.5 * c_axis * 0.5 * ny + 0.5 * nz;
+
+        const intersections = [];
+        const eps = 1e-4;
+
+        hEdges.forEach(([p1, p2]) => {
+          const val1 = (p1.x * normal.x + p1.y * normal.y + p1.z * normal.z) - planeD;
+          const val2 = (p2.x * normal.x + p2.y * normal.y + p2.z * normal.z) - planeD;
+
+          if (Math.abs(val1) < eps) {
+            intersections.push(p1.clone());
+          } else if (val1 * val2 < 0) {
+            const t = val1 / (val1 - val2);
+            const ix = p1.x + t * (p2.x - p1.x);
+            const iy = p1.y + t * (p2.y - p1.y);
+            const iz = p1.z + t * (p2.z - p1.z);
+            intersections.push(new THREE.Vector3(ix, iy, iz));
+          }
+        });
+
+        const uniquePts = [];
+        intersections.forEach(pt => {
+          if (!uniquePts.some(u => u.distanceTo(pt) < 1e-3)) uniquePts.push(pt);
+        });
+
+        if (uniquePts.length >= 3) {
+          const center = new THREE.Vector3();
+          uniquePts.forEach(p => center.add(p));
+          center.divideScalar(uniquePts.length);
+
+          const refVec = new THREE.Vector3().subVectors(uniquePts[0], center).normalize();
+          const binormal = new THREE.Vector3().crossVectors(normal, refVec).normalize();
+
+          uniquePts.sort((a, b) => {
+            const da = new THREE.Vector3().subVectors(a, center);
+            const db = new THREE.Vector3().subVectors(b, center);
+            return Math.atan2(da.dot(binormal), da.dot(refVec)) - Math.atan2(db.dot(binormal), db.dot(refVec));
+          });
+
+          const geom = new THREE.BufferGeometry();
+          const vertices = [];
+          for (let i = 0; i < uniquePts.length; i++) {
+            const next = (i + 1) % uniquePts.length;
+            vertices.push(center.x, center.y, center.z);
+            vertices.push(uniquePts[i].x, uniquePts[i].y, uniquePts[i].z);
+            vertices.push(uniquePts[next].x, uniquePts[next].y, uniquePts[next].z);
+          }
+          geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+          geom.computeVertexNormals();
+
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0xec4899,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.6,
+            roughness: 0.2
+          });
+          planeGroup.add(new THREE.Mesh(geom, mat));
+
+          const outlinePts = [...uniquePts, uniquePts[0]];
+          const outlineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
+          planeGroup.add(new THREE.Line(outlineGeom, new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 2 })));
+        }
+      }
+    }
+
+    // Direction Vector Arrow
+    function updateDirectionVector() {
+      while(vectorGroup.children.length > 0){ 
+        vectorGroup.remove(vectorGroup.children[0]); 
+      }
+
+      let { u, v, w, struct } = cState;
+      if (u === 0 && v === 0 && w === 0) return;
+
+      let dir = new THREE.Vector3();
+      let origin = new THREE.Vector3(0, 0, 0);
+
+      if (struct !== 'hcp') {
+        dir.set(u, v, w).normalize();
+      } else {
+        // In HCP: R = u*a1 + v*a2 + t*a3 + w*c
+        origin.set(0.5, 0, 0.5);
+        const t_val = cState.t;
+        const hexR = 0.6;
+        const c_axis = 1.633;
+        const dx = u * hexR - 0.5 * v * hexR - 0.5 * t_val * hexR;
+        const dz = (Math.sqrt(3)/2) * (v - t_val) * hexR;
+        const dy = w * (c_axis * 0.6);
+        dir.set(dx, dy, dz).normalize();
+      }
+
+      const arrowHelper = new THREE.ArrowHelper(dir, origin, 1.25, 0x22d3ee, 0.16, 0.08);
+      vectorGroup.add(arrowHelper);
+    }
+
+    // Update Numerical Metrics UI & Formulas
+    function updateMetricsUI() {
+      const p = structProps[cState.struct];
+      const isHcp = cState.struct === 'hcp';
+
+      metricN.innerHTML = `${p.N} <span class="text-xs text-slate-400 font-normal">atoms/cell</span>`;
+      metricNFormula.textContent = p.NFormula;
+      metricCN.textContent = p.CN;
+      metricAPF.innerHTML = `${p.APF.toFixed(2)} <span class="text-xs text-slate-400 font-normal">(${Math.round(p.APF * 100)}%)</span>`;
+      
+      structureTitle.textContent = p.name;
+      latticeParam.textContent = isHcp ? `격자상수 a = ${p.a} nm, c = ${p.c.toFixed(3)} nm (c/a=1.633)` : `격자상수 a = ${p.a} nm`;
+
+      if (!isHcp) {
+        // Cubic Interplanar spacing: d = a / sqrt(h^2 + k^2 + l^2)
+        const h2 = cState.h * cState.h + cState.k * cState.k + cState.l * cState.l;
+        if (h2 > 0) {
+          const dhkl = p.a / Math.sqrt(h2);
+          metricDhkl.innerHTML = `${dhkl.toFixed(3)} <span class="text-xs text-slate-400 font-normal">nm</span>`;
+          metricDFormula.textContent = `d = a / √(${cState.h}²+${cState.k}²+${cState.l}²)`;
+        } else {
+          metricDhkl.innerHTML = `--- <span class="text-xs text-slate-400 font-normal">nm</span>`;
+        }
+        tagPlane.textContent = `(${cState.h} ${cState.k} ${cState.l})`;
+        tagDir.textContent = `[${cState.u} ${cState.v} ${cState.w}]`;
+
+      } else {
+        // HCP 4-index Interplanar spacing:
+        // 1/d^2 = 4/3 * (h^2 + hk + k^2)/a^2 + l^2/c^2
+        const h = cState.h, k = cState.k, l = cState.l, i = cState.i;
+        const term1 = (4/3) * (h*h + h*k + k*k) / (p.a * p.a);
+        const term2 = (l * l) / (p.c * p.c);
+        const invD2 = term1 + term2;
+
+        if (invD2 > 0) {
+          const dhkil = 1 / Math.sqrt(invD2);
+          metricDhkl.innerHTML = `${dhkil.toFixed(3)} <span class="text-xs text-slate-400 font-normal">nm</span>`;
+          metricDFormula.textContent = `d_hkil (4축 밀러-브라베 공식 적용)`;
+        } else {
+          metricDhkl.innerHTML = `--- <span class="text-xs text-slate-400 font-normal">nm</span>`;
+        }
+
+        // Format negative indices with bar or minus
+        const fmtPlane = `(${h} ${k} ${i} ${l})`;
+        const fmtDir = `[${cState.u} ${cState.v} ${cState.t} ${cState.w}]`;
+        tagPlane.textContent = fmtPlane;
+        tagDir.textContent = fmtDir;
+      }
+
+      metricSlipCount.innerHTML = `${p.slipCount} <span class="text-xs text-slate-400 font-normal">systems</span>`;
+      metricSlipSubtext.textContent = p.slipDesc;
+    }
+
+    // Render Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // UI Event Handlers
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        cState.struct = btn.getAttribute('data-struct');
+
+        if (cState.struct === 'hcp') {
+          // Default HCP indices: (0001) [1 1 -2 0]
+          cState.h = 0; cState.k = 0; cState.l = 1;
+          cState.i = 0;
+          cState.u = 1; cState.v = 1; cState.w = 0;
+          cState.t = -2;
+          inputH.value = 0; inputK.value = 0; inputL.value = 1;
+          inputI.value = 0;
+          inputU.value = 1; inputV.value = 1; inputW.value = 0;
+          inputT.value = -2;
+        } else {
+          // Default Cubic indices: (111) [1 1 0]
+          cState.h = 1; cState.k = 1; cState.l = 1;
+          cState.u = 1; cState.v = 1; cState.w = 0;
+          inputH.value = 1; inputK.value = 1; inputL.value = 1;
+          inputU.value = 1; inputV.value = 1; inputW.value = 0;
+        }
+
+        rebuildStructure();
+      });
+    });
+
+    btnHardSphere.addEventListener('click', () => {
+      cState.mode = 'hardSphere';
+      btnHardSphere.className = 'px-2.5 py-1 rounded bg-purple-600 text-white font-medium';
+      btnBallStick.className = 'px-2.5 py-1 rounded text-slate-400 hover:text-white';
+      rebuildStructure();
+    });
+
+    btnBallStick.addEventListener('click', () => {
+      cState.mode = 'ballStick';
+      btnBallStick.className = 'px-2.5 py-1 rounded bg-purple-600 text-white font-medium';
+      btnHardSphere.className = 'px-2.5 py-1 rounded text-slate-400 hover:text-white';
+      rebuildStructure();
+    });
+
+    chkInterstitial.addEventListener('change', (e) => {
+      cState.showInterstitial = e.target.checked;
+      rebuildStructure();
+    });
+
+    sliderOpacity.addEventListener('input', (e) => {
+      cState.atomOpacity = parseFloat(e.target.value);
+      valOpacity.textContent = cState.atomOpacity.toFixed(2);
+      rebuildStructure();
+    });
+
+    // Handle Input Changes with auto-calculation of i and t for HCP
+    function onMillerChange() {
+      cState.h = parseInt(inputH.value) || 0;
+      cState.k = parseInt(inputK.value) || 0;
+      cState.l = parseInt(inputL.value) || 0;
+
+      cState.u = parseInt(inputU.value) || 0;
+      cState.v = parseInt(inputV.value) || 0;
+      cState.w = parseInt(inputW.value) || 0;
+
+      if (cState.struct === 'hcp') {
+        // Enforce HCP constraints: i = -(h + k), t = -(u + v)
+        cState.i = -(cState.h + cState.k);
+        cState.t = -(cState.u + cState.v);
+        inputI.value = cState.i;
+        inputT.value = cState.t;
+      }
+
+      updateMillerPlane();
+      updateDirectionVector();
+      updateMetricsUI();
+    }
+
+    [inputH, inputK, inputL, inputU, inputV, inputW].forEach(inp => {
+      inp.addEventListener('input', onMillerChange);
+    });
+
+    // Reset View
+    btnResetView.addEventListener('click', () => {
+      camera.position.set(2.8, 2.2, 3.2);
+      controls.target.set(0.5, 0.5, 0.5);
+      controls.update();
+    });
+
+    // Modal
+    btnMillerGuide.addEventListener('click', () => millerModal.classList.remove('hidden'));
+    btnCloseModal.addEventListener('click', () => millerModal.classList.add('hidden'));
+
+    // Capture
+    btnCapture.addEventListener('click', () => {
+      const dataUrl = renderer.domElement.toDataURL('image/png');
+      const win = window.open('');
+      const isHcp = cState.struct === 'hcp';
+      const planeStr = isHcp ? `(${cState.h} ${cState.k} ${cState.i} ${cState.l})` : `(${cState.h} ${cState.k} ${cState.l})`;
+      const dirStr = isHcp ? `[${cState.u} ${cState.v} ${cState.t} ${cState.w}]` : `[${cState.u} ${cState.v} ${cState.w}]`;
+
+      win.document.write(`
+        <html>
+        <head><title>3D 결정구조 & 밀러지수 캡처</title></head>
+        <body style="background:#0f172a; color:#f8fafc; font-family:sans-serif; text-align:center; padding:20px;">
+          <h2>💎 3D 결정구조 및 평면 ${planeStr} 캡처</h2>
+          <p>마우스 우클릭 후 <strong>'이미지 복사'</strong> 또는 <strong>'다른 이름으로 저장'</strong>하여 과제 문서에 삽입하세요.</p>
+          <img src="${dataUrl}" style="max-width:90%; border:1px solid #334155; border-radius:12px; margin-top:15px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"/>
+          <div style="margin-top:20px; font-size:13px; color:#94a3b8; max-width:600px; margin-left:auto; margin-right:auto; text-align:left; background:#1e293b; padding:15px; border-radius:8px;">
+            <p><strong>결정구조:</strong> ${structProps[cState.struct].name}</p>
+            <p><strong>단위격자 원자 수(N):</strong> ${structProps[cState.struct].N} (${structProps[cState.struct].NFormula})</p>
+            <p><strong>원자 충진율(APF):</strong> ${(structProps[cState.struct].APF * 100).toFixed(0)}%</p>
+            <p><strong>평면 지수:</strong> ${planeStr} ${isHcp ? '(4축 밀러-브라베)' : '(3축 밀러)'}</p>
+            <p><strong>방향 지수:</strong> ${dirStr}</p>
+            <p><strong>면간거리:</strong> ${metricDhkl.innerText}</p>
+          </div>
+        </body>
+        </html>
+      `);
+    });
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // Initial setup
+    controls.target.set(0.5, 0.5, 0.5);
+    rebuildStructure();
+    animate();
+  </script>
+</body>
+</html>

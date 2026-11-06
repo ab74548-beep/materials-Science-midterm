@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UTM 인장 시험 및 응력-변형률(Stress-Strain) 곡선 시뮬레이터</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Pretendard:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    input[type=range] { accent-color: #3b82f6; }
+    .led-green { box-shadow: 0 0 10px rgba(34, 197, 94, 0.6); }
+    .led-red { box-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+    .led-amber { box-shadow: 0 0 10px rgba(245, 158, 11, 0.6); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
+        <i data-lucide="scale" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">Module 02</span>
+          <h1 class="text-lg md:text-xl font-bold text-white tracking-tight">만능재료시험기(UTM) & 응력-변형률 곡선 시뮬레이터</h1>
+        </div>
+        <p class="text-xs text-slate-400">4단계 변형 거동 · 0.2% Offset 항복 · 네킹 · 진응력 vs 공칭응력 · 하중 제거(Unloading)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btnCapture" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="camera" class="w-4 h-4"></i>
+        <span>데이터 및 그래프 캡처</span>
+      </button>
+      <button id="btnReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        <span>시험 초기화</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Digital Readout Gauge Panel (UTM Digital Dashboard) -->
+  <section class="px-6 pt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 max-w-7xl mx-auto w-full">
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">현재 변형률 (Strain, ε)</div>
+      <div class="text-xl font-bold text-blue-400 mono mt-0.5" id="valStrain">0.00 <span class="text-xs text-slate-400 font-normal">%</span></div>
+      <div class="text-[10px] text-slate-500 mt-1 mono" id="valDisp">ΔL = 0.00 mm</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">공칭 응력 (Eng. Stress, σ)</div>
+      <div class="text-xl font-bold text-cyan-400 mono mt-0.5" id="valStress">0.0 <span class="text-xs text-slate-400 font-normal">MPa</span></div>
+      <div class="text-[10px] text-slate-500 mt-1 mono" id="valLoad">F = 0.00 kN</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">진응력 (True Stress, σ_t)</div>
+      <div class="text-xl font-bold text-rose-400 mono mt-0.5" id="valTrueStress">0.0 <span class="text-xs text-slate-400 font-normal">MPa</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">σ · (1 + ε)</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">0.2% Offset 항복강도 (σ_y)</div>
+      <div class="text-xl font-bold text-emerald-400 mono mt-0.5" id="valYield">--- <span class="text-xs text-slate-400 font-normal">MPa</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">탄성 한계 기준</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">인장 강도 (UTS, σ_TS)</div>
+      <div class="text-xl font-bold text-amber-400 mono mt-0.5" id="valUTS">--- <span class="text-xs text-slate-400 font-normal">MPa</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">네킹 시작 지점</div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">영구 소성 변형률 (ε_p)</div>
+      <div class="text-xl font-bold text-purple-400 mono mt-0.5" id="valPlasticStrain">0.00 <span class="text-xs text-slate-400 font-normal">%</span></div>
+      <div class="text-[10px] text-slate-500 mt-1">하중 제거 시 잔류 변형</div>
+    </div>
+  </section>
+
+  <!-- Main Content (Split View) -->
+  <main class="flex-1 px-6 py-5 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+    <!-- Left: UTM Machine & Specimen Canvas (Col-5) -->
+    <div class="lg:col-span-5 flex flex-col gap-4">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col flex-1">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 led-green" id="statusLed"></span>
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">UTM 만능재료시험기 & 덤벨 시편</h3>
+          </div>
+          <span class="text-[11px] font-semibold mono px-2 py-0.5 rounded bg-slate-800 text-slate-300" id="testStageLabel">
+            대기 중 (Ready)
+          </span>
+        </div>
+
+        <!-- 2D UTM Canvas -->
+        <div class="relative w-full flex-1 min-h-[380px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80 flex items-center justify-center">
+          <canvas id="canvasUTM" class="w-full h-full block"></canvas>
+          
+          <!-- Specimen Status Watermark / Callout -->
+          <div id="fractureNotice" class="absolute hidden flex-col items-center justify-center inset-0 bg-black/60 backdrop-blur-sm pointer-events-none">
+            <div class="px-4 py-2 rounded-xl bg-rose-500/20 border border-rose-500 text-rose-300 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-400"></i>
+              시편 파단 발생 (FRACTURE)
+            </div>
+            <p class="text-xs text-slate-300 mt-2 font-mono" id="fractureSummary">연신율(연성): 0% | 최종 파단강도: 0 MPa</p>
+          </div>
+        </div>
+
+        <!-- Specimen Info Footer -->
+        <div class="mt-3 flex justify-between items-center text-[11px] text-slate-400 border-t border-slate-800 pt-2.5">
+          <span>시편 규격: ASTM E8 표준 덤벨 시편</span>
+          <span class="mono">초기 표점거리 L₀ = 50.0 mm | 직경 d₀ = 12.5 mm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Stress-Strain Curve Graph & Controls (Col-7) -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+
+      <!-- Stress-Strain Canvas -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2">
+            <i data-lucide="line-chart" class="w-4 h-4 text-blue-400"></i>
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider">실시간 응력-변형률(Stress-Strain) 곡선</h3>
+          </div>
+          <div class="flex items-center gap-3 text-[11px]">
+            <label class="flex items-center gap-1 text-cyan-400 cursor-pointer">
+              <input type="checkbox" id="chkShow02Offset" checked class="rounded border-slate-700 bg-slate-800">
+              <span>0.2% Offset</span>
+            </label>
+            <label class="flex items-center gap-1 text-rose-400 cursor-pointer">
+              <input type="checkbox" id="chkShowTrueStress" checked class="rounded border-slate-700 bg-slate-800">
+              <span>진응력 (True)</span>
+            </label>
+            <label class="flex items-center gap-1 text-purple-400 cursor-pointer">
+              <input type="checkbox" id="chkShowArea" checked class="rounded border-slate-700 bg-slate-800">
+              <span>인성(Toughness) 면적</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Canvas -->
+        <div class="relative w-full h-[320px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800/80">
+          <canvas id="canvasCurve" class="w-full h-full block"></canvas>
+        </div>
+
+        <!-- Legend info -->
+        <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-blue-400 inline-block"></span> 공칭 응력 (Engineering Stress)</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-rose-400 border-b border-dashed inline-block"></span> 진응력 (True Stress)</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-emerald-400 inline-block"></span> 0.2% Offset 점선</span>
+          </div>
+          <div class="text-slate-500 font-mono text-[10px]" id="areaMetrics">
+            탄성에너지(Ur): -- MJ/m³ | 인성(Ut): -- MJ/m³
+          </div>
+        </div>
+      </div>
+
+      <!-- UTM Control Panel & Material Selection -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          
+          <!-- Preset Dropdown -->
+          <div>
+            <label class="text-xs font-medium text-slate-300 block mb-1">재료 프리셋 선택</label>
+            <select id="selMaterial" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 transition">
+              <option value="copper" selected>구리 (Copper - 연성 금속, 큰 소성 변형, 뚜렷한 네킹)</option>
+              <option value="steel">구조용 탄소강 (Structural Steel - 고강도, 명확한 항복)</option>
+              <option value="ceramic">세라믹 (Alumina Ceramic - 취성 재료, 소성 없이 파단)</option>
+              <option value="rubber">고무/엘라스토머 (Rubber - 비선형 대변형, 고탄성)</option>
+            </select>
+          </div>
+
+          <!-- Strain Rate Slider -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-medium text-slate-300">인장 속도 (Strain Rate)</label>
+              <span class="text-xs mono font-bold text-blue-400" id="valRate">1.0×</span>
+            </div>
+            <input type="range" id="sliderSpeed" min="0.2" max="3.0" step="0.2" value="1.0" class="w-full cursor-pointer mt-1">
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-800/80">
+          <button id="btnStart" class="py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="play" class="w-4 h-4"></i>
+            <span id="btnStartText">인장 시험 시작</span>
+          </button>
+
+          <button id="btnPause" class="py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition" disabled>
+            <i data-lucide="pause" class="w-4 h-4"></i>
+            <span>일시 정지</span>
+          </button>
+
+          <button id="btnUnload" class="py-2.5 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition" disabled>
+            <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+            <span>하중 제거 (Unload)</span>
+          </button>
+
+          <button id="btnReload" class="py-2.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition" disabled>
+            <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+            <span>재하중 (Reload)</span>
+          </button>
+        </div>
+
+        <!-- Material Behavior Guide Card -->
+        <div class="text-[11px] text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 leading-relaxed" id="materialDesc">
+          <!-- Dynamic Description inserted via JS -->
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Script Logic -->
+  <script>
+    lucide.createIcons();
+
+    // Material Definitions
+    const materials = {
+      copper: {
+        name: '구리 (Copper, Annealed)',
+        E: 110000,      // MPa (110 GPa)
+        yieldStrength: 70, // MPa
+        yieldStrain: 70 / 110000 + 0.002, // approx 0.20% offset
+        uts: 230,       // MPa
+        utsStrain: 0.35,// 35%
+        fractureStrain: 0.50, // 50%
+        fractureStress: 180,  // MPa (eng)
+        trueFractureStress: 310, // MPa (true)
+        desc: '💡 <strong>구리(연성 금속):</strong> 낮은 항복강도와 높은 연신율(>40%)을 보이며, 인장강도 도달 후 현저한 국부 네킹(Necking)이 발생하고 컵-앤-콘(Cup-and-cone) 연성 파단이 일어납니다.'
+      },
+      steel: {
+        name: '구조용 탄소강 (Structural Carbon Steel)',
+        E: 205000,     // MPa (205 GPa)
+        yieldStrength: 350, // MPa
+        yieldStrain: 350 / 205000 + 0.002,
+        uts: 520,      // MPa
+        utsStrain: 0.16, // 16%
+        fractureStrain: 0.26, // 26%
+        fractureStress: 420,  // MPa
+        trueFractureStress: 650,
+        desc: '💡 <strong>탄소강(고강도 구조재):</strong> 높은 탄성계수와 뚜렷한 항복 거동을 보이며, 가공경화(Strain Hardening)를 거쳐 높은 인장강도에 도달한 뒤 파단됩니다.'
+      },
+      ceramic: {
+        name: '알루미나 세라믹 (Alumina Ceramic)',
+        E: 380000,     // MPa (380 GPa)
+        yieldStrength: 280, // Brittle, elastic up to fracture
+        yieldStrain: 280 / 380000,
+        uts: 280,
+        utsStrain: 280 / 380000,
+        fractureStrain: 280 / 380000, // No plastic deformation
+        fractureStress: 280,
+        trueFractureStress: 280,
+        desc: '💡 <strong>세라믹(취성 재료):</strong> 공유/이온 결합으로 전위의 이동이 불가능하여 소성 변형 없이 완전한 탄성 거동만 하다가 이론 강도에서 미세 균열로 취성 벽개 파단(Cleavage Fracture)합니다.'
+      },
+      rubber: {
+        name: '천연 고무 (Natural Rubber)',
+        E: 5,          // MPa initial
+        yieldStrength: 10,
+        yieldStrain: 0.8,
+        uts: 25,
+        utsStrain: 4.5, // 450%
+        fractureStrain: 5.5, // 550%
+        fractureStress: 22,
+        trueFractureStress: 140,
+        desc: '💡 <strong>고무/엘라스토머:</strong> 가교된 고분자 사슬의 엔트로피 탄성으로 인해 500% 이상의 비선형 대변형(Nonlinear Hyperelasticity)을 견디며 큰 인성을 가집니다.'
+      }
+    };
+
+    // State
+    const simState = {
+      matKey: 'copper',
+      mat: materials.copper,
+      status: 'idle', // 'idle' | 'running' | 'paused' | 'unloading' | 'unloaded' | 'reloading' | 'fractured'
+      strain: 0,      // current strain (0 to fractureStrain)
+      stressEng: 0,
+      stressTrue: 0,
+      plasticStrain: 0,
+      unloadStartStrain: 0,
+      unloadStartStress: 0,
+      speed: 1.0,
+      history: [],    // recorded points [{ strain, stressEng, stressTrue }]
+      show02Offset: true,
+      showTrueStress: true,
+      showArea: true
+    };
+
+    // DOM Elements
+    const canvasUTM = document.getElementById('canvasUTM');
+    const ctxUTM = canvasUTM.getContext('2d');
+    const canvasCurve = document.getElementById('canvasCurve');
+    const ctxCurve = canvasCurve.getContext('2d');
+
+    const valStrain = document.getElementById('valStrain');
+    const valDisp = document.getElementById('valDisp');
+    const valStress = document.getElementById('valStress');
+    const valLoad = document.getElementById('valLoad');
+    const valTrueStress = document.getElementById('valTrueStress');
+    const valYield = document.getElementById('valYield');
+    const valUTS = document.getElementById('valUTS');
+    const valPlasticStrain = document.getElementById('valPlasticStrain');
+    const testStageLabel = document.getElementById('testStageLabel');
+    const statusLed = document.getElementById('statusLed');
+    const fractureNotice = document.getElementById('fractureNotice');
+    const fractureSummary = document.getElementById('fractureSummary');
+    const materialDesc = document.getElementById('materialDesc');
+    const areaMetrics = document.getElementById('areaMetrics');
+
+    const selMaterial = document.getElementById('selMaterial');
+    const sliderSpeed = document.getElementById('sliderSpeed');
+    const valRate = document.getElementById('valRate');
+    const btnStart = document.getElementById('btnStart');
+    const btnStartText = document.getElementById('btnStartText');
+    const btnPause = document.getElementById('btnPause');
+    const btnUnload = document.getElementById('btnUnload');
+    const btnReload = document.getElementById('btnReload');
+    const btnReset = document.getElementById('btnReset');
+    const btnCapture = document.getElementById('btnCapture');
+
+    const chkShow02Offset = document.getElementById('chkShow02Offset');
+    const chkShowTrueStress = document.getElementById('chkShowTrueStress');
+    const chkShowArea = document.getElementById('chkShowArea');
+
+    // Material Physics Curve Evaluation
+    function computeStressAtStrain(strain, mat) {
+      if (strain <= 0) return { eng: 0, trueStress: 0 };
+
+      // Case 1: Ceramic (Brittle, perfectly linear)
+      if (simState.matKey === 'ceramic') {
+        if (strain >= mat.fractureStrain) return { eng: 0, trueStress: 0, fractured: true };
+        const s = mat.E * strain;
+        return { eng: s, trueStress: s * (1 + strain) };
+      }
+
+      // Case 2: Rubber (Hyperelastic S-curve)
+      if (simState.matKey === 'rubber') {
+        if (strain >= mat.fractureStrain) return { eng: 0, trueStress: 0, fractured: true };
+        // Ogden / Arruda-Boyce qualitative shape
+        const s = 3.0 * (strain) + 0.4 * Math.pow(strain, 2) + 0.1 * Math.pow(strain, 3.5);
+        return { eng: s, trueStress: s * (1 + strain) };
+      }
+
+      // Case 3: Metals (Elastic -> Yield -> Hardening -> Necking)
+      const elasticLimitStrain = mat.yieldStrength / mat.E;
+
+      // 1) Elastic zone
+      if (strain <= elasticLimitStrain) {
+        const s = mat.E * strain;
+        return { eng: s, trueStress: s * (1 + strain) };
+      }
+
+      // 2) Plastic zone before UTS (Hollomon hardening)
+      if (strain <= mat.utsStrain) {
+        // Smooth transition from yield to UTS
+        const t = (strain - elasticLimitStrain) / (mat.utsStrain - elasticLimitStrain);
+        // Power-law hardening curve
+        const s = mat.yieldStrength + (mat.uts - mat.yieldStrength) * Math.pow(t, 0.45);
+        const trueS = s * (1 + strain);
+        return { eng: s, trueStress: trueS };
+      }
+
+      // 3) Necking zone (UTS to Fracture)
+      if (strain < mat.fractureStrain) {
+        const t = (strain - mat.utsStrain) / (mat.fractureStrain - mat.utsStrain);
+        // Engineering stress drops due to localized area reduction
+        const s = mat.uts - (mat.uts - mat.fractureStress) * (t * t);
+        // True stress continues to climb due to drastic area reduction
+        const trueS = mat.uts * (1 + mat.utsStrain) + (mat.trueFractureStress - mat.uts * (1 + mat.utsStrain)) * t;
+        return { eng: s, trueStress: trueS };
+      }
+
+      // Fracture
+      return { eng: 0, trueStress: 0, fractured: true };
+    }
+
+    // Set Material UI
+    function applyMaterial(key) {
+      simState.matKey = key;
+      simState.mat = materials[key];
+      materialDesc.innerHTML = simState.mat.desc;
+      resetSimulation();
+    }
+
+    // High DPI Helper
+    function resizeCanvas(canvas, ctx) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      return { width: rect.width, height: rect.height };
+    }
+
+    // Draw UTM Machine & Dogbone Specimen
+    function renderUTM() {
+      const { width, height } = resizeCanvas(canvasUTM, ctxUTM);
+      ctxUTM.clearRect(0, 0, width, height);
+
+      const cx = width / 2;
+      const cy = height / 2;
+
+      // UTM Frame geometry
+      const frameW = Math.min(260, width * 0.7);
+      const colX1 = cx - frameW / 2;
+      const colX2 = cx + frameW / 2;
+      const baseTop = height - 40;
+      const crossheadBaseY = 80;
+
+      // Displacement calculation
+      const maxStroke = 80;
+      const elongationRatio = simState.strain / simState.mat.fractureStrain;
+      const currentStroke = Math.min(maxStroke, elongationRatio * maxStroke);
+      const crossheadY = crossheadBaseY - currentStroke;
+
+      // 1. Draw Columns & Base
+      ctxUTM.fillStyle = '#1e293b';
+      // Base plate
+      ctxUTM.fillRect(cx - frameW/2 - 25, baseTop, frameW + 50, 30);
+      ctxUTM.strokeStyle = '#334155';
+      ctxUTM.strokeRect(cx - frameW/2 - 25, baseTop, frameW + 50, 30);
+
+      // Top Fixed Beam
+      ctxUTM.fillRect(cx - frameW/2 - 25, 20, frameW + 50, 24);
+      ctxUTM.strokeRect(cx - frameW/2 - 25, 20, frameW + 50, 24);
+
+      // Vertical Dual Columns (Chrome/Steel gradient)
+      const gradCol = ctxUTM.createLinearGradient(colX1 - 10, 0, colX1 + 10, 0);
+      gradCol.addColorStop(0, '#475569');
+      gradCol.addColorStop(0.5, '#94a3b8');
+      gradCol.addColorStop(1, '#334155');
+
+      ctxUTM.fillStyle = gradCol;
+      ctxUTM.fillRect(colX1 - 9, 44, 18, baseTop - 44);
+      ctxUTM.fillRect(colX2 - 9, 44, 18, baseTop - 44);
+
+      // 2. Moving Crosshead (Hydraulic / Lead Screw)
+      const gradCrosshead = ctxUTM.createLinearGradient(0, crossheadY - 14, 0, crossheadY + 14);
+      gradCrosshead.addColorStop(0, '#3b82f6');
+      gradCrosshead.addColorStop(1, '#1d4ed8');
+      ctxUTM.fillStyle = gradCrosshead;
+      ctxUTM.fillRect(cx - frameW/2 - 15, crossheadY - 12, frameW + 30, 24);
+      ctxUTM.strokeStyle = '#60a5fa';
+      ctxUTM.strokeRect(cx - frameW/2 - 15, crossheadY - 12, frameW + 30, 24);
+
+      // Load Cell on Crosshead
+      ctxUTM.fillStyle = '#0f172a';
+      ctxUTM.fillRect(cx - 24, crossheadY + 12, 48, 16);
+      ctxUTM.strokeStyle = '#38bdf8';
+      ctxUTM.strokeRect(cx - 24, crossheadY + 12, 48, 16);
+      ctxUTM.fillStyle = '#38bdf8';
+      ctxUTM.font = '8px JetBrains Mono';
+      ctxUTM.textAlign = 'center';
+      ctxUTM.fillText('LOAD CELL', cx, crossheadY + 23);
+
+      // Top Grip attached to Load Cell
+      const topGripY = crossheadY + 28;
+      ctxUTM.fillStyle = '#334155';
+      ctxUTM.fillRect(cx - 20, topGripY, 40, 22);
+      ctxUTM.strokeStyle = '#64748b';
+      ctxUTM.strokeRect(cx - 20, topGripY, 40, 22);
+
+      // Bottom Grip attached to Base
+      const bottomGripY = baseTop - 45;
+      ctxUTM.fillStyle = '#334155';
+      ctxUTM.fillRect(cx - 20, bottomGripY, 40, 22);
+      ctxUTM.strokeRect(cx - 20, bottomGripY, 40, 22);
+
+      // 3. Draw Dogbone Specimen
+      const specTop = topGripY + 20;
+      const specBottom = bottomGripY + 2;
+      const currentGaugeLen = specBottom - specTop;
+
+      const isFractured = simState.status === 'fractured';
+      const isNecking = simState.strain >= simState.mat.utsStrain && simState.matKey !== 'ceramic';
+
+      // Width calculation with Poisson contraction and Necking
+      const origGaugeW = 16;
+      let midGaugeW = origGaugeW * Math.max(0.4, 1 - simState.strain * 0.4);
+      if (isNecking) {
+        const neckFactor = (simState.strain - simState.mat.utsStrain) / (simState.mat.fractureStrain - simState.mat.utsStrain);
+        midGaugeW *= Math.max(0.3, 1 - neckFactor * 0.55);
+      }
+
+      ctxUTM.save();
+
+      // Specimen material color gradient
+      let matColor = '#f59e0b'; // copper
+      if (simState.matKey === 'steel') matColor = '#94a3b8';
+      if (simState.matKey === 'ceramic') matColor = '#e2e8f0';
+      if (simState.matKey === 'rubber') matColor = '#10b981';
+
+      if (!isFractured) {
+        // Intact specimen with smooth necking profile
+        ctxUTM.fillStyle = matColor;
+        ctxUTM.strokeStyle = '#ffffff20';
+        ctxUTM.beginPath();
+        // Top shoulder
+        ctxUTM.moveTo(cx - 18, specTop);
+        ctxUTM.lineTo(cx + 18, specTop);
+        ctxUTM.quadraticCurveTo(cx + origGaugeW/2, specTop + 15, cx + midGaugeW/2, specTop + currentGaugeLen * 0.5);
+        ctxUTM.quadraticCurveTo(cx + origGaugeW/2, specBottom - 15, cx + 18, specBottom);
+        ctxUTM.lineTo(cx - 18, specBottom);
+        ctxUTM.quadraticCurveTo(cx - origGaugeW/2, specBottom - 15, cx - midGaugeW/2, specTop + currentGaugeLen * 0.5);
+        ctxUTM.quadraticCurveTo(cx - origGaugeW/2, specTop + 15, cx - 18, specTop);
+        ctxUTM.closePath();
+        ctxUTM.fill();
+        ctxUTM.stroke();
+
+        // Extensometer knife edges & gage length markers
+        const gageY1 = specTop + currentGaugeLen * 0.25;
+        const gageY2 = specBottom - currentGaugeLen * 0.25;
+        ctxUTM.strokeStyle = '#38bdf8';
+        ctxUTM.lineWidth = 1.5;
+        ctxUTM.beginPath();
+        ctxUTM.moveTo(cx - midGaugeW/2 - 8, gageY1);
+        ctxUTM.lineTo(cx - midGaugeW/2, gageY1);
+        ctxUTM.moveTo(cx - midGaugeW/2 - 8, gageY2);
+        ctxUTM.lineTo(cx - midGaugeW/2, gageY2);
+        ctxUTM.stroke();
+
+        // Extensometer dimension line
+        ctxUTM.beginPath();
+        ctxUTM.moveTo(cx - midGaugeW/2 - 6, gageY1);
+        ctxUTM.lineTo(cx - midGaugeW/2 - 6, gageY2);
+        ctxUTM.stroke();
+      } else {
+        // Fractured specimen (2 pieces separated with jagged fracture surface)
+        const breakGap = 12;
+        const breakY = specTop + currentGaugeLen * 0.5;
+
+        // Top half
+        ctxUTM.fillStyle = matColor;
+        ctxUTM.beginPath();
+        ctxUTM.moveTo(cx - 18, specTop);
+        ctxUTM.lineTo(cx + 18, specTop);
+        ctxUTM.quadraticCurveTo(cx + origGaugeW/2, specTop + 15, cx + midGaugeW/2, breakY - breakGap);
+        // Jagged cup-and-cone break
+        ctxUTM.lineTo(cx + 2, breakY - breakGap - 4);
+        ctxUTM.lineTo(cx - midGaugeW/2, breakY - breakGap);
+        ctxUTM.quadraticCurveTo(cx - origGaugeW/2, specTop + 15, cx - 18, specTop);
+        ctxUTM.closePath();
+        ctxUTM.fill();
+
+        // Bottom half
+        ctxUTM.beginPath();
+        ctxUTM.moveTo(cx - 18, specBottom);
+        ctxUTM.lineTo(cx + 18, specBottom);
+        ctxUTM.quadraticCurveTo(cx + origGaugeW/2, specBottom - 15, cx + midGaugeW/2, breakY + breakGap);
+        ctxUTM.lineTo(cx + 2, breakY + breakGap - 4);
+        ctxUTM.lineTo(cx - midGaugeW/2, breakY + breakGap);
+        ctxUTM.quadraticCurveTo(cx - origGaugeW/2, specBottom - 15, cx - 18, specBottom);
+        ctxUTM.closePath();
+        ctxUTM.fill();
+      }
+
+      ctxUTM.restore();
+
+      // Tensile Force Arrows
+      if (simState.status === 'running' || simState.status === 'unloading' || simState.status === 'reloading') {
+        ctxUTM.strokeStyle = '#ef4444';
+        ctxUTM.lineWidth = 2.5;
+        // Upward arrow on top
+        ctxUTM.beginPath();
+        ctxUTM.moveTo(cx, crossheadY - 18);
+        ctxUTM.lineTo(cx, crossheadY - 32);
+        ctxUTM.lineTo(cx - 5, crossheadY - 26);
+        ctxUTM.moveTo(cx, crossheadY - 32);
+        ctxUTM.lineTo(cx + 5, crossheadY - 26);
+        ctxUTM.stroke();
+
+        ctxUTM.fillStyle = '#ef4444';
+        ctxUTM.font = 'bold 9px JetBrains Mono';
+        ctxUTM.textAlign = 'center';
+        ctxUTM.fillText(`F = ${(simState.stressEng * 0.123).toFixed(2)} kN`, cx, crossheadY - 36);
+      }
+    }
+
+    // Draw Stress-Strain Curves & Areas
+    function renderCurve() {
+      const { width, height } = resizeCanvas(canvasCurve, ctxCurve);
+      ctxCurve.clearRect(0, 0, width, height);
+
+      const margin = { top: 25, right: 35, bottom: 45, left: 60 };
+      const plotW = width - margin.left - margin.right;
+      const plotH = height - margin.top - margin.bottom;
+
+      // Coordinate scaling based on material maxes
+      const maxStrainGraph = simState.mat.fractureStrain * 1.25;
+      const maxStressGraph = (simState.mat.trueFractureStress || simState.mat.uts) * 1.2;
+
+      function toScreenX(eps) {
+        return margin.left + (eps / maxStrainGraph) * plotW;
+      }
+      function toScreenY(stress) {
+        return margin.top + plotH - (stress / maxStressGraph) * plotH;
+      }
+
+      // Background Grid
+      ctxCurve.strokeStyle = '#1e293b';
+      ctxCurve.lineWidth = 1;
+      ctxCurve.beginPath();
+      for (let i = 0; i <= 5; i++) {
+        const y = margin.top + (plotH / 5) * i;
+        ctxCurve.moveTo(margin.left, y);
+        ctxCurve.lineTo(margin.left + plotW, y);
+      }
+      for (let i = 0; i <= 6; i++) {
+        const x = margin.left + (plotW / 6) * i;
+        ctxCurve.moveTo(x, margin.top);
+        ctxCurve.lineTo(x, margin.top + plotH);
+      }
+      ctxCurve.stroke();
+
+      // Axis Ticks and Labels
+      ctxCurve.fillStyle = '#64748b';
+      ctxCurve.font = '10px JetBrains Mono';
+      ctxCurve.textAlign = 'right';
+      for (let i = 0; i <= 5; i++) {
+        const sVal = (maxStressGraph / 5) * i;
+        const y = toScreenY(sVal);
+        ctxCurve.fillText(`${sVal.toFixed(0)}`, margin.left - 8, y + 3);
+      }
+      ctxCurve.textAlign = 'center';
+      for (let i = 0; i <= 5; i++) {
+        const eVal = (maxStrainGraph / 5) * i;
+        const x = toScreenX(eVal);
+        ctxCurve.fillText(`${(eVal * 100).toFixed(0)}%`, x, margin.top + plotH + 18);
+      }
+
+      // Axis Titles
+      ctxCurve.fillStyle = '#94a3b8';
+      ctxCurve.font = '11px Pretendard';
+      ctxCurve.textAlign = 'center';
+      ctxCurve.fillText('변형률 (Strain, ε) [%]', margin.left + plotW / 2, height - 8);
+
+      ctxCurve.save();
+      ctxCurve.translate(16, margin.top + plotH / 2);
+      ctxCurve.rotate(-Math.PI / 2);
+      ctxCurve.fillText('응력 (Stress, σ) [MPa]', 0, 0);
+      ctxCurve.restore();
+
+      // 0.2% Offset Yield Line
+      if (simState.show02Offset && simState.matKey !== 'ceramic' && simState.matKey !== 'rubber') {
+        const offset = 0.002; // 0.2%
+        const xOffsetStart = toScreenX(offset);
+        const yOffsetStart = toScreenY(0);
+        const sTop = simState.mat.yieldStrength * 1.25;
+        const eTop = offset + sTop / simState.mat.E;
+        const xOffsetEnd = toScreenX(eTop);
+        const yOffsetEnd = toScreenY(sTop);
+
+        ctxCurve.strokeStyle = '#10b981';
+        ctxCurve.lineWidth = 1.5;
+        ctxCurve.setLineDash([4, 4]);
+        ctxCurve.beginPath();
+        ctxCurve.moveTo(xOffsetStart, yOffsetStart);
+        ctxCurve.lineTo(xOffsetEnd, yOffsetEnd);
+        ctxCurve.stroke();
+        ctxCurve.setLineDash([]);
+
+        // Intersection Marker for Yield Strength
+        const yYield = toScreenY(simState.mat.yieldStrength);
+        const xYield = toScreenX(simState.mat.yieldStrain);
+        ctxCurve.fillStyle = '#10b981';
+        ctxCurve.beginPath();
+        ctxCurve.arc(xYield, yYield, 4, 0, Math.PI * 2);
+        ctxCurve.fill();
+        ctxCurve.font = '9px JetBrains Mono';
+        ctxCurve.textAlign = 'left';
+        ctxCurve.fillText(`σ_y = ${simState.mat.yieldStrength} MPa (0.2% Offset)`, xYield + 6, yYield - 4);
+      }
+
+      // Toughness / Resilience Area Shading
+      if (simState.showArea && simState.history.length > 2) {
+        ctxCurve.fillStyle = 'rgba(147, 51, 234, 0.15)';
+        ctxCurve.beginPath();
+        ctxCurve.moveTo(toScreenX(simState.history[0].strain), toScreenY(0));
+        for (let pt of simState.history) {
+          ctxCurve.lineTo(toScreenX(pt.strain), toScreenY(pt.stressEng));
+        }
+        const lastPt = simState.history[simState.history.length - 1];
+        ctxCurve.lineTo(toScreenX(lastPt.strain), toScreenY(0));
+        ctxCurve.closePath();
+        ctxCurve.fill();
+      }
+
+      // Draw Engineering Stress Curve (Solid Blue)
+      if (simState.history.length > 1) {
+        ctxCurve.strokeStyle = '#38bdf8';
+        ctxCurve.lineWidth = 2.5;
+        ctxCurve.beginPath();
+        ctxCurve.moveTo(toScreenX(simState.history[0].strain), toScreenY(simState.history[0].stressEng));
+        for (let i = 1; i < simState.history.length; i++) {
+          ctxCurve.lineTo(toScreenX(simState.history[i].strain), toScreenY(simState.history[i].stressEng));
+        }
+        ctxCurve.stroke();
+      }
+
+      // Draw True Stress Curve (Dashed Rose)
+      if (simState.showTrueStress && simState.history.length > 1) {
+        ctxCurve.strokeStyle = '#fb7185';
+        ctxCurve.lineWidth = 2;
+        ctxCurve.setLineDash([4, 3]);
+        ctxCurve.beginPath();
+        ctxCurve.moveTo(toScreenX(simState.history[0].strain), toScreenY(simState.history[0].stressTrue));
+        for (let i = 1; i < simState.history.length; i++) {
+          ctxCurve.lineTo(toScreenX(simState.history[i].strain), toScreenY(simState.history[i].stressTrue));
+        }
+        ctxCurve.stroke();
+        ctxCurve.setLineDash([]);
+      }
+
+      // Live Current Tracker Dot
+      if (simState.history.length > 0) {
+        const last = simState.history[simState.history.length - 1];
+        const curX = toScreenX(last.strain);
+        const curY = toScreenY(last.stressEng);
+
+        ctxCurve.fillStyle = '#38bdf8';
+        ctxCurve.beginPath();
+        ctxCurve.arc(curX, curY, 6, 0, Math.PI * 2);
+        ctxCurve.fill();
+        ctxCurve.strokeStyle = '#ffffff';
+        ctxCurve.lineWidth = 2;
+        ctxCurve.stroke();
+
+        // Crosshair dashed guides
+        ctxCurve.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+        ctxCurve.lineWidth = 1;
+        ctxCurve.setLineDash([2, 2]);
+        ctxCurve.beginPath();
+        ctxCurve.moveTo(margin.left, curY); ctxCurve.lineTo(curX, curY);
+        ctxCurve.moveTo(curX, curY); ctxCurve.lineTo(curX, margin.top + plotH);
+        ctxCurve.stroke();
+        ctxCurve.setLineDash([]);
+      }
+
+      // UTS Marker
+      if (simState.strain >= simState.mat.utsStrain && simState.matKey !== 'ceramic') {
+        const xUTS = toScreenX(simState.mat.utsStrain);
+        const yUTS = toScreenY(simState.mat.uts);
+        ctxCurve.fillStyle = '#f59e0b';
+        ctxCurve.beginPath();
+        ctxCurve.arc(xUTS, yUTS, 4, 0, Math.PI * 2);
+        ctxCurve.fill();
+        ctxCurve.font = '9px JetBrains Mono';
+        ctxCurve.textAlign = 'center';
+        ctxCurve.fillText(`UTS: ${simState.mat.uts} MPa`, xUTS, yUTS - 8);
+      }
+    }
+
+    // Step Simulation
+    function stepSimulation() {
+      if (simState.status === 'running') {
+        const dStrain = 0.0012 * simState.speed;
+        simState.strain += dStrain;
+
+        const res = computeStressAtStrain(simState.strain, simState.mat);
+        if (res.fractured) {
+          simState.status = 'fractured';
+          simState.stressEng = 0;
+          simState.stressTrue = 0;
+          onFracture();
+          return;
+        }
+
+        simState.stressEng = res.eng;
+        simState.stressTrue = res.trueStress;
+        simState.history.push({
+          strain: simState.strain,
+          stressEng: simState.stressEng,
+          stressTrue: simState.stressTrue
+        });
+
+      } else if (simState.status === 'unloading') {
+        // Elastic unloading along slope E: stress drops
+        const dStress = (simState.mat.E * 0.001) * simState.speed;
+        simState.stressEng = Math.max(0, simState.stressEng - dStress);
+        // Strain follows slope E
+        simState.strain = simState.unloadStartStrain - (simState.unloadStartStress - simState.stressEng) / simState.mat.E;
+        simState.stressTrue = simState.stressEng * (1 + simState.strain);
+
+        simState.history.push({
+          strain: simState.strain,
+          stressEng: simState.stressEng,
+          stressTrue: simState.stressTrue
+        });
+
+        if (simState.stressEng <= 0.1) {
+          simState.stressEng = 0;
+          simState.status = 'unloaded';
+          simState.plasticStrain = simState.strain;
+          testStageLabel.textContent = '하중 완전 제거 (Unloaded)';
+          btnUnload.disabled = true;
+          btnReload.disabled = false;
+        }
+
+      } else if (simState.status === 'reloading') {
+        // Elastic reloading along slope E: stress rises back to previous yield envelope
+        const dStress = (simState.mat.E * 0.001) * simState.speed;
+        simState.stressEng = Math.min(simState.unloadStartStress, simState.stressEng + dStress);
+        simState.strain = simState.plasticStrain + simState.stressEng / simState.mat.E;
+        simState.stressTrue = simState.stressEng * (1 + simState.strain);
+
+        simState.history.push({
+          strain: simState.strain,
+          stressEng: simState.stressEng,
+          stressTrue: simState.stressTrue
+        });
+
+        if (simState.stressEng >= simState.unloadStartStress - 0.5) {
+          simState.status = 'running';
+          btnReload.disabled = true;
+          btnUnload.disabled = false;
+          testStageLabel.textContent = '인장 진행 중 (Tensile Testing)';
+        }
+      }
+
+      updateUI();
+    }
+
+    // Fracture event handler
+    function onFracture() {
+      testStageLabel.textContent = '파단 완료 (Fractured)';
+      statusLed.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 led-red';
+      fractureNotice.classList.remove('hidden');
+      fractureSummary.textContent = `연신율(Elongation): ${(simState.strain * 100).toFixed(1)}% | 공칭 인장강도: ${simState.mat.uts} MPa`;
+      btnStart.disabled = true;
+      btnPause.disabled = true;
+      btnUnload.disabled = true;
+      btnReload.disabled = true;
+    }
+
+    // Update Numerical Readouts
+    function updateUI() {
+      valStrain.innerHTML = `${(simState.strain * 100).toFixed(2)} <span class="text-xs text-slate-400 font-normal">%</span>`;
+      valDisp.textContent = `ΔL = ${(simState.strain * 50.0).toFixed(2)} mm`;
+
+      valStress.innerHTML = `${simState.stressEng.toFixed(1)} <span class="text-xs text-slate-400 font-normal">MPa</span>`;
+      const loadKN = (simState.stressEng * Math.PI * 12.5 * 12.5 / 4) / 1000;
+      valLoad.textContent = `F = ${loadKN.toFixed(2)} kN`;
+
+      valTrueStress.innerHTML = `${simState.stressTrue.toFixed(1)} <span class="text-xs text-slate-400 font-normal">MPa</span>`;
+      valYield.innerHTML = `${simState.mat.yieldStrength.toFixed(0)} <span class="text-xs text-slate-400 font-normal">MPa</span>`;
+      valUTS.innerHTML = `${simState.mat.uts.toFixed(0)} <span class="text-xs text-slate-400 font-normal">MPa</span>`;
+      valPlasticStrain.innerHTML = `${(simState.plasticStrain * 100).toFixed(2)} <span class="text-xs text-slate-400 font-normal">%</span>`;
+
+      // Stage label
+      if (simState.status === 'running') {
+        const elasticLimit = simState.mat.yieldStrength / simState.mat.E;
+        if (simState.strain < elasticLimit) {
+          testStageLabel.textContent = '1단계: 선형 탄성 (Hooke’s Law)';
+          statusLed.className = 'w-2.5 h-2.5 rounded-full bg-blue-500';
+        } else if (simState.strain < simState.mat.utsStrain) {
+          testStageLabel.textContent = '2~3단계: 소성 변형 및 가공경화';
+          statusLed.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 led-amber';
+        } else {
+          testStageLabel.textContent = '4단계: 국부 네킹 (Necking)';
+          statusLed.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 led-red';
+        }
+      }
+
+      // Toughness calculation: approx numerical trapezoidal integration
+      let toughness = 0;
+      for (let i = 1; i < simState.history.length; i++) {
+        const dEps = simState.history[i].strain - simState.history[i-1].strain;
+        const avgS = (simState.history[i].stressEng + simState.history[i-1].stressEng) / 2;
+        toughness += avgS * dEps;
+      }
+      const resilience = (simState.mat.yieldStrength * simState.mat.yieldStrength) / (2 * simState.mat.E);
+      areaMetrics.textContent = `탄성에너지(Ur): ${resilience.toFixed(2)} MJ/m³ | 인성(Ut): ${toughness.toFixed(2)} MJ/m³`;
+    }
+
+    // Reset Simulation
+    function resetSimulation() {
+      simState.status = 'idle';
+      simState.strain = 0;
+      simState.stressEng = 0;
+      simState.stressTrue = 0;
+      simState.plasticStrain = 0;
+      simState.history = [{ strain: 0, stressEng: 0, stressTrue: 0 }];
+      testStageLabel.textContent = '대기 중 (Ready)';
+      statusLed.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 led-green';
+      fractureNotice.classList.add('hidden');
+
+      btnStart.disabled = false;
+      btnStartText.textContent = '인장 시험 시작';
+      btnPause.disabled = true;
+      btnUnload.disabled = true;
+      btnReload.disabled = true;
+
+      updateUI();
+    }
+
+    // Animation Loop
+    function loop() {
+      stepSimulation();
+      renderUTM();
+      renderCurve();
+      requestAnimationFrame(loop);
+    }
+
+    // Event Listeners
+    selMaterial.addEventListener('change', (e) => applyMaterial(e.target.value));
+    sliderSpeed.addEventListener('input', (e) => {
+      simState.speed = parseFloat(e.target.value);
+      valRate.textContent = `${simState.speed.toFixed(1)}×`;
+    });
+
+    btnStart.addEventListener('click', () => {
+      if (simState.status === 'idle' || simState.status === 'paused') {
+        simState.status = 'running';
+        btnStartText.textContent = '시험 진행 중';
+        btnStart.disabled = true;
+        btnPause.disabled = false;
+        btnUnload.disabled = false;
+      }
+    });
+
+    btnPause.addEventListener('click', () => {
+      if (simState.status === 'running') {
+        simState.status = 'paused';
+        testStageLabel.textContent = '일시 정지됨 (Paused)';
+        btnStart.disabled = false;
+        btnStartText.textContent = '시험 재개';
+        btnPause.disabled = true;
+      }
+    });
+
+    btnUnload.addEventListener('click', () => {
+      if (simState.status === 'running' || simState.status === 'paused') {
+        simState.status = 'unloading';
+        simState.unloadStartStrain = simState.strain;
+        simState.unloadStartStress = simState.stressEng;
+        testStageLabel.textContent = '하중 제거 진행 중 (Unloading)';
+        btnStart.disabled = true;
+        btnPause.disabled = true;
+        btnUnload.disabled = true;
+      }
+    });
+
+    btnReload.addEventListener('click', () => {
+      if (simState.status === 'unloaded') {
+        simState.status = 'reloading';
+        testStageLabel.textContent = '재하중 진행 중 (Reloading)';
+        btnReload.disabled = true;
+      }
+    });
+
+    btnReset.addEventListener('click', resetSimulation);
+
+    chkShow02Offset.addEventListener('change', (e) => simState.show02Offset = e.target.checked);
+    chkShowTrueStress.addEventListener('change', (e) => simState.showTrueStress = e.target.checked);
+    chkShowArea.addEventListener('change', (e) => simState.showArea = e.target.checked);
+
+    btnCapture.addEventListener('click', () => {
+      const dataUrl = canvasCurve.toDataURL('image/png');
+      const win = window.open('');
+      win.document.write(`
+        <html>
+        <head><title>인장 시험 응력-변형률 곡선 데이터 (보고서용)</title></head>
+        <body style="background:#0f172a; color:#f8fafc; font-family:sans-serif; text-align:center; padding:20px;">
+          <h2>📊 UTM 인장 시험 결과 곡선 및 데이터</h2>
+          <p>마우스 우클릭 후 <strong>'이미지 복사'</strong> 또는 <strong>'다른 이름으로 저장'</strong>하여 PDF 보고서에 삽입하세요.</p>
+          <img src="${dataUrl}" style="max-width:90%; border:1px solid #334155; border-radius:12px; margin-top:15px; box-shadow:0 10px 25px rgba(0,0,0,0.5);"/>
+          <div style="margin-top:20px; font-size:13px; color:#94a3b8; max-width:600px; margin-left:auto; margin-right:auto; text-align:left; background:#1e293b; padding:15px; border-radius:8px;">
+            <p><strong>시험 재료:</strong> ${simState.mat.name}</p>
+            <p><strong>탄성계수(E):</strong> ${(simState.mat.E/1000).toFixed(1)} GPa</p>
+            <p><strong>0.2% Offset 항복강도(σ_y):</strong> ${simState.mat.yieldStrength} MPa</p>
+            <p><strong>인장강도(UTS, σ_TS):</strong> ${simState.mat.uts} MPa</p>
+            <p><strong>연신율(파단 변형률):</strong> ${(simState.strain * 100).toFixed(1)}%</p>
+            <p><strong>영구 소성 변형률:</strong> ${(simState.plasticStrain * 100).toFixed(2)}%</p>
+          </div>
+        </body>
+        </html>
+      `);
+    });
+
+    // Initialize
+    applyMaterial('copper');
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
